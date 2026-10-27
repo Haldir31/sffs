@@ -294,7 +294,7 @@ func buildShow(cfg config, tmdb int64, info *tvInfo, rows []seriesRow) *show {
 		seen[r.hash] = true
 		var pd seriesParsed
 		_ = json.Unmarshal([]byte(r.parsed), &pd)
-		if badQuality.MatchString(strings.ToLower(pd.Quality + " " + r.raw)) {
+		if unplayable(r.raw, pd.Quality) {
 			continue
 		}
 		covs := coverOf(r, pd, info)

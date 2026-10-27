@@ -1,4 +1,4 @@
-From 26e258291f7cf5ee4cbdeda07409888a5668291e Mon Sep 17 00:00:00 2001
+From da767c6dd967f3704c4335ec73fb826bb050beef Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 14:31:24 +0000
 Subject: [PATCH 5/6] POC: une version StreamFusion hors cache bascule sur une

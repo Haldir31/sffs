@@ -1,4 +1,4 @@
-From ac4e9f2e97e64441ae28618e01313b46c92f8916 Mon Sep 17 00:00:00 2001
+From 2c2ade4fa3a01629352e4c7f3c8762cab4ad7962 Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 20:23:18 +0000
 Subject: [PATCH 6/6] =?UTF-8?q?POC:=20probe=20de=20la=20source=20r=C3=A9el?=
@@ -14,12 +14,12 @@ analyse la source servie et la ligne media_files est réécrite (pistes, codecs,
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01AbUx511UGbcCoLk6U5BQjP
 ---
- internal/scanner/probe_repair.go | 78 ++++++++++++++++++++++++++++++++
- internal/sfvirtual/sfvirtual.go  | 27 +++++++++++
- 2 files changed, 105 insertions(+)
+ internal/scanner/probe_repair.go | 91 ++++++++++++++++++++++++++++++++
+ internal/sfvirtual/sfvirtual.go  | 27 ++++++++++
+ 2 files changed, 118 insertions(+)
 
 diff --git a/internal/scanner/probe_repair.go b/internal/scanner/probe_repair.go
-index 8690f55d2..f05354a92 100644
+index 8690f55d2..c8d05233d 100644
 --- a/internal/scanner/probe_repair.go
 +++ b/internal/scanner/probe_repair.go
 @@ -3,6 +3,7 @@ package scanner
@@ -55,7 +55,7 @@ index 8690f55d2..f05354a92 100644
  	if NeedsCriticalProbeRepair(file) && ffprobePath != "" {
  		repaired, err := e.ensureCriticalProbe(ctx, file, ffprobePath)
  		if err != nil {
-@@ -510,6 +522,72 @@ func (e *PlaybackProbeEnsurer) ensureCriticalProbe(ctx context.Context, file *mo
+@@ -510,6 +522,85 @@ func (e *PlaybackProbeEnsurer) ensureCriticalProbe(ctx context.Context, file *mo
  	}
  }
  
@@ -65,6 +65,11 @@ index 8690f55d2..f05354a92 100644
 +func (e *PlaybackProbeEnsurer) ensureSFServedProbe(ctx context.Context, file *models.MediaFile, ffprobePath, marker string) (*models.MediaFile, error) {
 +	sharedCtx := context.WithoutCancel(ctx)
 +	key := fmt.Sprintf("sfserved:%d:%s", file.ID, marker)
++	// Échec récent sur cette source : pas de nouvel essai avant sfServedRetryAfter. Chaque essai lit
++	// le début du fichier chez le débrideur, et un lecteur redemande la lecture en boucle.
++	if until, ok := sfServedFailures.Load(key); ok && time.Now().Before(until.(time.Time)) {
++		return file, errSFServedProbeBackoff
++	}
 +	resultCh := e.probeRepair.DoChan(key, func() (any, error) {
 +		lookupCtx, cancelLookup := context.WithTimeout(sharedCtx, 10*time.Second)
 +		current, err := e.fileRepo.GetByID(lookupCtx, file.ID)
@@ -93,7 +98,8 @@ index 8690f55d2..f05354a92 100644
 +		t0 := time.Now()
 +		probe, err := probeFile(probeCtx, ffprobePath, current.FilePath)
 +		if err != nil || probe == nil {
-+			slog.WarnContext(sharedCtx, "streamfusion: probe de la source servie impossible", "component", "scanner", "file_id", current.ID, "source", marker, "error", err)
++			sfServedFailures.Store(key, time.Now().Add(sfServedRetryAfter))
++			slog.WarnContext(sharedCtx, "streamfusion: probe de la source servie impossible", "component", "scanner", "file_id", current.ID, "source", marker, "error", err, "retry_after", sfServedRetryAfter)
 +			if err == nil {
 +				err = fmt.Errorf("streamfusion: probe vide")
 +			}
@@ -124,6 +130,13 @@ index 8690f55d2..f05354a92 100644
 +		return repaired, nil
 +	}
 +}
++
++// sfServedFailures : échecs récents de ensureSFServedProbe (clé fichier + source -> fin d'attente).
++var sfServedFailures sync.Map
++
++const sfServedRetryAfter = time.Hour
++
++var errSFServedProbeBackoff = errors.New("streamfusion: analyse de cette source en échec récemment, nouvel essai plus tard")
 +
  // recordProbeRejection persists that ffprobe refused the file and returns the
  // row as stored afterwards, so the planner can answer with a terminal that

@@ -295,7 +295,7 @@ func loadMovies(ctx context.Context, cfg config) ([]*movie, error) {
 
 		var pd parsedData
 		_ = json.Unmarshal([]byte(parsed), &pd)
-		if badQuality.MatchString(strings.ToLower(pd.Quality + " " + raw)) {
+		if unplayable(raw, pd.Quality) {
 			continue // CAM, TS, screener…
 		}
 
@@ -410,6 +410,16 @@ func isRemux(raw, quality string) bool {
 }
 
 var badQuality = regexp.MustCompile(`\b(cam|camrip|hdcam|ts|hdts|telesync|tc|telecine|scr|screener|dvdscr|r5|3d|sbs|hsbs|fsbs|hou)\b`)
+
+// Images disque (ISO, BDMV, COMPLETE BLURAY…) : ni ffprobe ni Silo ne savent les lire, et une
+// analyse à la lecture téléchargerait le début d'un fichier de plusieurs dizaines de Go.
+var discImage = regexp.MustCompile(`(^|[^a-z0-9])(iso|bdmv|bd25|bd50|bd66|bd100|m2ts|complete[ ._-]*(uhd[ ._-]*)?blu-?ray|full[ ._-]*bd|disc[ ._-]?[0-9])([^a-z0-9]|$)`)
+
+// unplayable : release à écarter (mauvaise qualité ou image disque).
+func unplayable(raw, quality string) bool {
+	s := strings.ToLower(quality + " " + raw)
+	return badQuality.MatchString(s) || discImage.MatchString(s)
+}
 
 var langPatterns = map[string]*regexp.Regexp{
 	"fr": regexp.MustCompile(`(?i)\b(french|truefrench|vff|vfq|vfi|vf2|vf|vof|multi|fr)\b|🇫🇷`),
