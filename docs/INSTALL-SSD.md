@@ -15,6 +15,10 @@ Ce que fait l'installation :
 - **Secrets :** ils sont générés ou demandés une seule fois (invites `SSDV2_PROMPT`, valeurs masquées), puis gardés dans
   `<SETTINGS_STORAGE>/docker/<user>/sffs-secrets/` et `silosffs-secrets/` (droits 0600).
 - **Mises à jour de SSDV2 :** aucun fichier suivi par git n'est modifié dans SSDV2, donc `git pull` reste possible.
+- **Correctifs SSDV2 en attente :** comme l'interface web et `ssdv2ctl`, l'installation passe par
+  `generique.sh`, qui applique d'abord les correctifs SSDV2 en attente (`patches/`). Ils peuvent modifier des
+  fichiers de SSDV2, comme le catalogue ou les menus.
+- **Testé** sur un serveur SSDV2 ARM (aarch64, 4 cœurs) : la construction de l'image Silo y prend moins de 10 minutes.
 
 ## Prérequis
 
