@@ -1411,6 +1411,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	var fps map[titleKey]titleFP
+	if wc.every > 0 {
+		if fps, err = allFingerprints(ctx, cfg.dsn); err != nil {
+			log.Fatal(err)
+		}
+	}
 	movies, shows, err := loadAll(ctx, cfg)
 	if err != nil {
 		log.Fatal(err)
@@ -1439,7 +1445,7 @@ func main() {
 		go root.reloadLoop(cfg.reload, silo)
 	}
 	if wc.every > 0 {
-		go root.watchLoop(wc, wm, silo)
+		go root.watchLoop(wc, wm, fps, silo)
 	}
 	sec := time.Minute
 	server, err := fs.Mount(cfg.mount, root, &fs.Options{

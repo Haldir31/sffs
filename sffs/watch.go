@@ -68,16 +68,73 @@ func watermark(ctx context.Context, dsn string) (int64, error) {
 	return wm, err
 }
 
-// changedSince liste les films et séries dont une source a été ajoutée ou modifiée depuis le repère wm,
-// et renvoie le repère suivant.
-func changedSince(ctx context.Context, dsn string, wm int64) (movies, shows []int64, newWM int64, err error) {
+// Empreinte des sources d'un titre dans StreamFusion : nombre de sources et XOR des hachages de leurs
+// info_hash. Les tâches de fond de StreamFusion réécrivent des dizaines de milliers de lignes (xmin
+// change) sans en changer les sources : seul un titre dont l'empreinte change est rechargé.
+type titleKey struct {
+	series bool
+	id     int64
+}
+
+type titleFP struct{ n, x int64 }
+
+// Lignes que sffs charge (mêmes filtres que loadMovies et loadSeries), classées film ou série.
+const fpFilter = `tmdb_id is not null and coalesce(btrim(info_hash),'') <> ''
+	and (type = 'movie' or (type in ('series','show') and coalesce(tmdb_media_type,'') <> 'movie'))`
+
+// fingerprints calcule l'empreinte de tous les titres (ids vide) ou des titres ids.
+func fingerprints(ctx context.Context, conn *pgx.Conn, ids []int64) (map[titleKey]titleFP, error) {
+	q := `select tmdb_id, type <> 'movie', count(*), bit_xor(hashtextextended(lower(btrim(info_hash)), 0))
+	        from torrent_items where ` + fpFilter
+	args := []any{}
+	if len(ids) > 0 {
+		q += ` and tmdb_id = any($1)`
+		args = append(args, ids)
+	}
+	rows, err := conn.Query(ctx, q+` group by 1, 2`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	fps := map[titleKey]titleFP{}
+	for rows.Next() {
+		var (
+			id     int32
+			series bool
+			fp     titleFP
+		)
+		if err := rows.Scan(&id, &series, &fp.n, &fp.x); err != nil {
+			return nil, err
+		}
+		fps[titleKey{series, int64(id)}] = fp
+	}
+	return fps, rows.Err()
+}
+
+// allFingerprints : empreintes de départ (au démarrage, après watermark).
+func allFingerprints(ctx context.Context, dsn string) (map[titleKey]titleFP, error) {
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close(context.Background())
+	return fingerprints(ctx, conn, nil)
+}
+
+// Au-delà, recalculer toutes les empreintes (une lecture de la table, ~1 s) coûte moins que des
+// milliers de recherches par tmdb_id.
+const maxTargetedTitles = 200
+
+// changedSince liste les films et séries dont les sources ont changé depuis le repère wm (fps est
+// mis à jour), et renvoie le repère suivant.
+func changedSince(ctx context.Context, dsn string, wm int64, fps map[titleKey]titleFP) (movies, shows []int64, newWM int64, err error) {
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		return nil, nil, wm, err
 	}
 	defer conn.Close(context.Background())
 	// Repère suivant pris avant la lecture : une transaction encore en cours a un numéro au moins
-	// égal, elle sera vue au passage suivant. Une ligne vue deux fois ne coûte qu'un rechargement.
+	// égal, elle sera vue au passage suivant. Une ligne vue deux fois ne coûte qu'une comparaison.
 	var xmax int64
 	if err := conn.QueryRow(ctx, `select pg_snapshot_xmin(s)::text::bigint, pg_snapshot_xmax(s)::text::bigint
 	                                from pg_current_snapshot() s`).Scan(&newWM, &xmax); err != nil {
@@ -85,38 +142,89 @@ func changedSince(ctx context.Context, dsn string, wm int64) (movies, shows []in
 	}
 	lo, hi := wm&0xffffffff, xmax&0xffffffff
 	wrapped := wm>>32 != xmax>>32 // les numéros sur 32 bits ont rebouclé depuis wm
-	rows, err := conn.Query(ctx, `select tmdb_id, type, coalesce(tmdb_media_type,'')
+	rows, err := conn.Query(ctx, `select distinct tmdb_id, type <> 'movie'
 	                                from torrent_items
 	                               where (xmin::text::bigint >= $1 or ($3 and xmin::text::bigint < $2))
-	                                 and tmdb_id is not null and coalesce(btrim(info_hash),'') <> ''`, lo, hi, wrapped)
+	                                 and `+fpFilter, lo, hi, wrapped)
 	if err != nil {
 		return nil, nil, wm, err
 	}
-	defer rows.Close()
-	mset, sset := map[int64]bool{}, map[int64]bool{}
+	touched := map[titleKey]bool{}
+	ids := map[int64]bool{}
 	for rows.Next() {
 		var (
-			id      int32
-			typ, mt string
+			id     int32
+			series bool
 		)
-		if err := rows.Scan(&id, &typ, &mt); err != nil {
+		if err := rows.Scan(&id, &series); err != nil {
+			rows.Close()
 			return nil, nil, wm, err
 		}
-		switch {
-		case typ == "movie":
-			mset[int64(id)] = true
-		case (typ == "series" || typ == "show") && mt != "movie":
-			sset[int64(id)] = true
-		}
+		touched[titleKey{series, int64(id)}] = true
+		ids[int64(id)] = true
 	}
+	rows.Close()
 	if err := rows.Err(); err != nil {
 		return nil, nil, wm, err
 	}
-	for id := range mset {
-		movies = append(movies, id)
+	if len(touched) == 0 {
+		return nil, nil, newWM, nil
 	}
-	for id := range sset {
-		shows = append(shows, id)
+
+	var fresh map[titleKey]titleFP
+	full := len(ids) > maxTargetedTitles
+	if full {
+		fresh, err = fingerprints(ctx, conn, nil)
+	} else {
+		list := make([]int64, 0, len(ids))
+		for id := range ids {
+			list = append(list, id)
+		}
+		fresh, err = fingerprints(ctx, conn, list)
+	}
+	if err != nil {
+		return nil, nil, wm, err
+	}
+	changed := map[titleKey]bool{}
+	check := func(k titleKey) {
+		f, ok := fresh[k]
+		if old, had := fps[k]; ok != had || f != old {
+			changed[k] = true
+		}
+		if ok {
+			fps[k] = f
+		} else {
+			delete(fps, k)
+		}
+	}
+	if full {
+		for k := range fresh {
+			check(k)
+		}
+		for k := range fps {
+			if _, ok := fresh[k]; !ok {
+				check(k)
+			}
+		}
+	} else {
+		for k := range touched {
+			check(k)
+		}
+	}
+	if len(touched) >= 50 || len(changed) > 0 {
+		mode := "ciblé"
+		if full {
+			mode = "complet"
+		}
+		log.Printf("surveillance : %d titres réécrits dans StreamFusion, %d avec des sources modifiées (contrôle %s)",
+			len(touched), len(changed), mode)
+	}
+	for k := range changed {
+		if k.series {
+			shows = append(shows, k.id)
+		} else {
+			movies = append(movies, k.id)
+		}
 	}
 	sort.Slice(movies, func(i, j int) bool { return movies[i] < movies[j] })
 	sort.Slice(shows, func(i, j int) bool { return shows[i] < shows[j] })
@@ -124,11 +232,11 @@ func changedSince(ctx context.Context, dsn string, wm int64) (movies, shows []in
 }
 
 // watchLoop : surveillance minute par minute, rechargement ciblé et scans Silo ciblés.
-func (n *rootNode) watchLoop(wc watchConfig, wm int64, silo *siloNotifier) {
+func (n *rootNode) watchLoop(wc watchConfig, wm int64, fps map[titleKey]titleFP, silo *siloNotifier) {
 	cfg := n.st.cfg
 	for range time.Tick(wc.every) {
 		ctx := context.Background()
-		mids, sids, newWM, err := changedSince(ctx, cfg.dsn, wm)
+		mids, sids, newWM, err := changedSince(ctx, cfg.dsn, wm, fps)
 		if err != nil {
 			log.Printf("surveillance : %v", err)
 			continue
