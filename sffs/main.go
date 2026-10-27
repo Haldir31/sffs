@@ -421,6 +421,24 @@ var badQuality = regexp.MustCompile(`\b(cam|camrip|hdcam|ts|hdts|telesync|tc|tel
 // analyse à la lecture téléchargerait le début d'un fichier de plusieurs dizaines de Go.
 var discImage = regexp.MustCompile(`(^|[^a-z0-9])(iso|bdmv|bd25|bd50|bd66|bd100|m2ts|(complete|full)[ ._-]*(uhd[ ._-]*)?blu-?ray|full[ ._-]*bd|disc[ ._-]?[0-9])([^a-z0-9]|$)`)
 
+// selfCheck vérifie chaque minute que le montage répond. Après 3 échecs de suite (montage mort,
+// « Transport endpoint is not connected »), sffs s'arrête : Docker le relance (restart: always) et le
+// démarrage nettoie le montage mort.
+func selfCheck(mount string) {
+	fails := 0
+	for range time.Tick(time.Minute) {
+		if _, err := os.Stat(mount + "/films"); err != nil {
+			fails++
+			log.Printf("contrôle du montage : %v (%d/3)", err, fails)
+			if fails >= 3 {
+				log.Fatalf("montage %s mort : arrêt pour redémarrage", mount)
+			}
+			continue
+		}
+		fails = 0
+	}
+}
+
 // Encodages légers (HDLight, 4KLight, mHD…) : seulement les formes sans ambiguïté. « LD » (Line
 // Dubbed) est un doublage, et « Light » ou « Small » seuls peuvent faire partie du titre.
 var lightEncode = regexp.MustCompile(`(^|[^a-z0-9])((hd|4k|uhd|ultra)[ ._-]?light|mhd|mini[ ._-]?(hd|4k)|` +
@@ -1511,6 +1529,8 @@ func main() {
 	}
 	log.Printf("monté sur %s", cfg.mount)
 	go silo.libraryLoop(cfg.series)
+	go silo.healLoop(5 * time.Minute)
+	go selfCheck(cfg.mount)
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)

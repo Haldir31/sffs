@@ -20,7 +20,10 @@ import (
 //	SFFS_SILO_FILMS_NAME / _SERIES_NAME  noms des bibliothèques (défaut Films, Séries)
 
 type siloLibrary struct {
-	Paths []string `json:"paths"`
+	ID          int      `json:"id"`
+	Name        string   `json:"name"`
+	Paths       []string `json:"paths"`
+	ScanWarning *string  `json:"scan_warning_code"`
 }
 
 type libraryWanted struct {
@@ -117,4 +120,44 @@ func envOr(name, def string) string {
 		return v
 	}
 	return def
+}
+
+// healLoop relance le scan d'une bibliothèque sffs que Silo a marquée injoignable (dead_root),
+// une fois son dossier de nouveau lisible. Cas typique : sffs redémarré pendant un scan, Silo a vu
+// les dossiers disparaître une minute ; il ne supprime rien mais ne rescanne pas de lui-même.
+func (s *siloNotifier) healLoop(every time.Duration) {
+	if s == nil || s.wc.siloURL == "" {
+		return
+	}
+	roots := map[string]bool{s.wc.siloFilms: true, s.wc.siloSeries: true}
+	for range time.Tick(every) {
+		if s.key() == "" {
+			continue
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		var libs []siloLibrary
+		if err := s.api(ctx, http.MethodGet, "/api/v1/libraries", nil, &libs); err != nil {
+			cancel()
+			continue
+		}
+		for _, l := range libs {
+			if l.ScanWarning == nil || *l.ScanWarning != "dead_root" {
+				continue
+			}
+			for _, p := range l.Paths {
+				if !roots[p] {
+					continue
+				}
+				if _, err := os.Stat(p); err != nil {
+					continue // pas encore lisible côté sffs : prochain passage
+				}
+				if err := s.api(ctx, http.MethodPost, "/api/v2/scan", map[string]string{"path": p}, nil); err != nil {
+					log.Printf("silo : bibliothèque %q injoignable, relance du scan impossible : %v", l.Name, err)
+				} else {
+					log.Printf("silo : bibliothèque %q marquée injoignable, scan relancé (%s)", l.Name, p)
+				}
+			}
+		}
+		cancel()
+	}
 }

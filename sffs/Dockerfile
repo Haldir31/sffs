@@ -19,5 +19,8 @@ VOLUME /config
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 # sffs démonte proprement à l'arrêt (SIGTERM) ; l'entrée nettoie un montage resté bloqué
 # après un arrêt brutal (« Transport endpoint is not connected »).
+# Sain quand le montage répond. Premier démarrage : jusqu'à 30 min (cache TMDB des séries).
+HEALTHCHECK --interval=1m --timeout=10s --start-period=30m --retries=3 \
+    CMD test -d "$SFFS_MOUNT/films" || exit 1
 STOPSIGNAL SIGTERM
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
