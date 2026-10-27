@@ -4,6 +4,7 @@
 .env
 .env.*
 docs/
+!docs/design/schemas/
 node_modules
 web/node_modules
 web/dist
@@ -12,5 +13,3 @@ silo
 streamapp
 *.md
 .playwright-cli/
-!docs/design/schemas/
-!docs/design/schemas/**

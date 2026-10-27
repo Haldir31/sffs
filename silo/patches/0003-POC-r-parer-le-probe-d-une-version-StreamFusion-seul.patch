@@ -1,4 +1,4 @@
-From 8190a821dd5a42945a73229e5416b6d8d7c8dbac Mon Sep 17 00:00:00 2001
+From 692457b9cca576963f177a88fdb14b9adf2187d7 Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 13:58:19 +0000
 Subject: [PATCH 3/6] =?UTF-8?q?POC:=20r=C3=A9parer=20le=20probe=20d'une=20?=
@@ -37,10 +37,10 @@ index 83bea74bd..b1412a1d6 100644
  	}
  
 diff --git a/internal/sfvirtual/sfvirtual.go b/internal/sfvirtual/sfvirtual.go
-index 4722ac67b..8abe1045e 100644
+index 41f9eab5b..3f5198929 100644
 --- a/internal/sfvirtual/sfvirtual.go
 +++ b/internal/sfvirtual/sfvirtual.go
-@@ -17,6 +17,7 @@ import (
+@@ -19,6 +19,7 @@ import (
  const (
  	attrProbe = "user.sf.probe"
  	attrArm   = "user.sf.arm"
@@ -48,7 +48,7 @@ index 4722ac67b..8abe1045e 100644
  )
  
  // Info décrit une version telle que sffs la tire de la base StreamFusion.
-@@ -89,6 +90,15 @@ func IsVirtual(path string) bool {
+@@ -93,6 +94,15 @@ func IsVirtual(path string) bool {
  	return ok
  }
  

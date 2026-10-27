@@ -1,4 +1,4 @@
-From ae3816a93072ac68b16f7bc6969b5ed5e254a1cb Mon Sep 17 00:00:00 2001
+From 1e04a069e1536df6eca62c35b98386b99423cea8 Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 12:40:33 +0000
 Subject: [PATCH 1/6] POC: versions virtuelles StreamFusion servies par sffs
@@ -11,18 +11,18 @@ sffs accepte de le lire chez le debrideur.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
- internal/api/handlers/playback.go         |  3 +
- internal/api/handlers/playback_missing.go |  3 +
- internal/playback/directplay.go           |  2 +
- internal/scanner/scanner.go               |  8 ++
- internal/scanner/sf_virtual.go            | 79 ++++++++++++++++++
- internal/sfvirtual/sfvirtual.go           | 98 +++++++++++++++++++++++
- 6 files changed, 193 insertions(+)
+ internal/api/handlers/playback.go         |   3 +
+ internal/api/handlers/playback_missing.go |   3 +
+ internal/playback/directplay.go           |   2 +
+ internal/scanner/scanner.go               |   8 ++
+ internal/scanner/sf_virtual.go            |  79 +++++++++++++++++
+ internal/sfvirtual/sfvirtual.go           | 102 ++++++++++++++++++++++
+ 6 files changed, 197 insertions(+)
  create mode 100644 internal/scanner/sf_virtual.go
  create mode 100644 internal/sfvirtual/sfvirtual.go
 
 diff --git a/internal/api/handlers/playback.go b/internal/api/handlers/playback.go
-index f16567d5b..0c477e6e2 100644
+index cdcea7153..e8ba02c39 100644
 --- a/internal/api/handlers/playback.go
 +++ b/internal/api/handlers/playback.go
 @@ -36,6 +36,7 @@ import (
@@ -43,10 +43,10 @@ index f16567d5b..0c477e6e2 100644
  	if err != nil {
  		slog.WarnContext(ctx, "playback probe repair failed", "component", "api", "file_id", file.ID, "path", file.FilePath, "error", err)
 diff --git a/internal/api/handlers/playback_missing.go b/internal/api/handlers/playback_missing.go
-index 75f7875a1..f6fddccbe 100644
+index 0612b4275..d2942d9a5 100644
 --- a/internal/api/handlers/playback_missing.go
 +++ b/internal/api/handlers/playback_missing.go
-@@ -14,6 +14,7 @@ import (
+@@ -15,6 +15,7 @@ import (
  	"github.com/Silo-Server/silo-server/internal/models"
  	"github.com/Silo-Server/silo-server/internal/playback"
  	"github.com/Silo-Server/silo-server/internal/scanner"
@@ -54,40 +54,40 @@ index 75f7875a1..f6fddccbe 100644
  )
  
  // MissingFileMarker marks media files as missing when playback discovers they
-@@ -102,6 +103,8 @@ func preflightPlaybackFile(
+@@ -103,6 +104,8 @@ func preflightPlaybackFile(
  		return &playbackFilePreflightError{notFound: true}
  	}
  
 +	// Version virtuelle StreamFusion : autorise sa lecture (sans effet sur un fichier ordinaire).
 +	sfvirtual.Arm(file.FilePath)
- 	if _, err := os.Stat(file.FilePath); err != nil {
+ 	if _, err := fspath.Stat(file.FilePath); err != nil {
  		if os.IsNotExist(err) {
  			markPlaybackFileMissing(ctx, file, marker, eventsHub)
 diff --git a/internal/playback/directplay.go b/internal/playback/directplay.go
-index a6bd38d5c..ae0e3433b 100644
+index b2fccfe80..78246f0af 100644
 --- a/internal/playback/directplay.go
 +++ b/internal/playback/directplay.go
-@@ -15,6 +15,7 @@ import (
- 	"time"
+@@ -16,6 +16,7 @@ import (
  
+ 	"github.com/Silo-Server/silo-server/internal/fspath"
  	"github.com/Silo-Server/silo-server/internal/httpstream"
 +	"github.com/Silo-Server/silo-server/internal/sfvirtual"
  )
  
  // unknownMediaMIME is the MIME type of a file with an unknown extension.
-@@ -91,6 +92,7 @@ func ServeDirectPlay(w http.ResponseWriter, r *http.Request, filePath string) er
+@@ -92,6 +93,7 @@ func ServeDirectPlay(w http.ResponseWriter, r *http.Request, filePath string) er
  	// WriteTimeout; roll the write deadline with progress instead.
  	streamWriter := httpstream.NewRollingDeadlineWriter(w)
  	w = streamWriter
 +	sfvirtual.Arm(filePath)
- 	f, err := os.Open(filePath)
+ 	f, err := fspath.Open(filePath)
  	if err != nil {
  		if os.IsNotExist(err) {
 diff --git a/internal/scanner/scanner.go b/internal/scanner/scanner.go
-index 453d69e9e..ffeb6f4e7 100644
+index 40bb43cfc..75282329c 100644
 --- a/internal/scanner/scanner.go
 +++ b/internal/scanner/scanner.go
-@@ -24,6 +24,7 @@ import (
+@@ -26,6 +26,7 @@ import (
  	"github.com/Silo-Server/silo-server/internal/naming"
  	"github.com/Silo-Server/silo-server/internal/pathscope"
  	"github.com/Silo-Server/silo-server/internal/rootcheck"
@@ -95,7 +95,7 @@ index 453d69e9e..ffeb6f4e7 100644
  	"github.com/Silo-Server/silo-server/internal/themesongs"
  )
  
-@@ -4204,6 +4205,10 @@ func (s *Scanner) clearLegacyLinksForUnmatchableRoots(_ context.Context, _ int,
+@@ -4242,6 +4243,10 @@ func (s *Scanner) clearLegacyLinksForUnmatchableRoots(_ context.Context, _ int,
  // gatherHints computes the OSHash for a media file.
  func (s *Scanner) gatherHints(filePath string) FileHints {
  	hints := FileHints{}
@@ -106,7 +106,7 @@ index 453d69e9e..ffeb6f4e7 100644
  	hash, err := ComputeOSHash(filePath)
  	if err != nil {
  		slog.Warn("scanner: OSHash computation failed", "path", filePath, "error", err)
-@@ -4222,6 +4227,9 @@ const probeSourceLocal = "local"
+@@ -4260,6 +4265,9 @@ const probeSourceLocal = "local"
  // file.
  func (s *Scanner) probeFile(ctx context.Context, filePath string) (probe *ProbeData, probeSource string, rejected bool) {
  	probeSource = probeSourceLocal
@@ -203,10 +203,10 @@ index 000000000..0e6cec988
 +}
 diff --git a/internal/sfvirtual/sfvirtual.go b/internal/sfvirtual/sfvirtual.go
 new file mode 100644
-index 000000000..4722ac67b
+index 000000000..41f9eab5b
 --- /dev/null
 +++ b/internal/sfvirtual/sfvirtual.go
-@@ -0,0 +1,98 @@
+@@ -0,0 +1,102 @@
 +// Package sfvirtual reconnaît les fichiers virtuels exposés par sffs (bibliothèque StreamFusion).
 +//
 +// sffs présente les torrents de StreamFusion comme des fichiers sous SILO_SF_ROOT (défaut
@@ -221,6 +221,8 @@ index 000000000..4722ac67b
 +	"os"
 +	"strings"
 +	"syscall"
++
++	"github.com/Silo-Server/silo-server/internal/fspath"
 +)
 +
 +const (
@@ -261,7 +263,9 @@ index 000000000..4722ac67b
 +	return path == r || strings.HasPrefix(path, r+"/")
 +}
 +
++// getxattr lit un attribut étendu ; path est un chemin Silo (encodé, voir fspath).
 +func getxattr(path, name string) ([]byte, error) {
++	path = fspath.Decode(path)
 +	buf := make([]byte, 4096)
 +	for {
 +		n, err := syscall.Getxattr(path, name, buf)

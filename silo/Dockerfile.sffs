@@ -17,7 +17,7 @@ COPY web/ .
 # The v2 contract fixtures are imported by web tests, which `tsrs -b` type-checks
 # as part of the build; they live outside web/ so copy them explicitly.
 COPY contracts/api/v2/fixtures/ /app/contracts/api/v2/fixtures/
-# (sffs) les tests web importent docs/design/schemas, exclu par .dockerignore upstream
+# Web tests also import the shared design schema vectors under docs/.
 COPY docs/design/schemas/ /app/docs/design/schemas/
 RUN pnpm run build
 
@@ -64,7 +64,7 @@ RUN --network=none go build \
 # upgrade covers packages already in the base image between Debian's refreshes
 # of the trixie-slim tag.
 FROM debian:trixie-slim AS runtime
-# (sffs) pas de limite runtime ici : GOMAXPROCS est fixe via silo.env
+# (sffs) pas de limite runtime ici : GOMAXPROCS se règle par l'environnement du conteneur
 ARG TARGETARCH
 ARG INTEL_GMMLIB_VERSION=22.10.0
 ARG INTEL_IGC_VERSION=2.34.4

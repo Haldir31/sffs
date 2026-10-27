@@ -1,4 +1,4 @@
-From a8289965d41d98d1c81ab484bff8c4572a547958 Mon Sep 17 00:00:00 2001
+From 26e258291f7cf5ee4cbdeda07409888a5668291e Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 14:31:24 +0000
 Subject: [PATCH 5/6] POC: une version StreamFusion hors cache bascule sur une
@@ -71,10 +71,10 @@ index 0e6cec988..4512d673f 100644
 +	return &c
 +}
 diff --git a/internal/sfvirtual/sfvirtual.go b/internal/sfvirtual/sfvirtual.go
-index 8abe1045e..4102e1b38 100644
+index 3f5198929..bdfd0a245 100644
 --- a/internal/sfvirtual/sfvirtual.go
 +++ b/internal/sfvirtual/sfvirtual.go
-@@ -15,9 +15,10 @@ import (
+@@ -17,9 +17,10 @@ import (
  )
  
  const (
@@ -88,7 +88,7 @@ index 8abe1045e..4102e1b38 100644
  )
  
  // Info décrit une version telle que sffs la tire de la base StreamFusion.
-@@ -99,6 +100,16 @@ func IsArmed(path string) bool {
+@@ -103,6 +104,16 @@ func IsArmed(path string) bool {
  	return err == nil && string(b) == "1"
  }
  

@@ -1,4 +1,4 @@
-From 29364f762c2bea985419fc9ae1af0f109b3f67cf Mon Sep 17 00:00:00 2001
+From ac4e9f2e97e64441ae28618e01313b46c92f8916 Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 20:23:18 +0000
 Subject: [PATCH 6/6] =?UTF-8?q?POC:=20probe=20de=20la=20source=20r=C3=A9el?=
@@ -19,19 +19,25 @@ Claude-Session: https://claude.ai/code/session_01AbUx511UGbcCoLk6U5BQjP
  2 files changed, 105 insertions(+)
 
 diff --git a/internal/scanner/probe_repair.go b/internal/scanner/probe_repair.go
-index 8690f55d2..901023e99 100644
+index 8690f55d2..f05354a92 100644
 --- a/internal/scanner/probe_repair.go
 +++ b/internal/scanner/probe_repair.go
-@@ -3,7 +3,9 @@ package scanner
+@@ -3,6 +3,7 @@ package scanner
  import (
  	"context"
  	"errors"
 +	"fmt"
  	"log/slog"
-+	"os"
  	"strconv"
  	"strings"
- 	"sync"
+@@ -10,6 +11,7 @@ import (
+ 	"sync/atomic"
+ 	"time"
+ 
++	"github.com/Silo-Server/silo-server/internal/fspath"
+ 	"github.com/Silo-Server/silo-server/internal/mediaprobe"
+ 	"github.com/Silo-Server/silo-server/internal/models"
+ 	"github.com/Silo-Server/silo-server/internal/sfvirtual"
 @@ -422,6 +424,16 @@ func (e *PlaybackProbeEnsurer) ensureProbeRepair(ctx context.Context, file *mode
  	// One snapshot per repair: the guard and the ffprobe run must see the same
  	// binaries, or a SetFFmpegPath between them hands probeFile an empty path.
@@ -95,7 +101,7 @@ index 8690f55d2..901023e99 100644
 +		}
 +		updated := *current
 +		applyProbeData(&updated, probe, marker)
-+		if st, statErr := os.Stat(current.FilePath); statErr == nil && st.Size() > 0 {
++		if st, statErr := fspath.Stat(current.FilePath); statErr == nil && st.Size() > 0 {
 +			updated.FileSize = st.Size()
 +		}
 +		slog.InfoContext(sharedCtx, "streamfusion: probe de la source servie", "component", "scanner",
@@ -123,10 +129,10 @@ index 8690f55d2..901023e99 100644
  // row as stored afterwards, so the planner can answer with a terminal that
  // names the damaged file instead of one that suggests waiting for a scan. It
 diff --git a/internal/sfvirtual/sfvirtual.go b/internal/sfvirtual/sfvirtual.go
-index 4102e1b38..e844dd7ae 100644
+index bdfd0a245..835fcc894 100644
 --- a/internal/sfvirtual/sfvirtual.go
 +++ b/internal/sfvirtual/sfvirtual.go
-@@ -19,8 +19,14 @@ const (
+@@ -21,8 +21,14 @@ const (
  	attrArm    = "user.sf.arm"
  	attrArmed  = "user.sf.armed"
  	attrCached = "user.sf.cached"
@@ -141,7 +147,7 @@ index 4102e1b38..e844dd7ae 100644
  // Info décrit une version telle que sffs la tire de la base StreamFusion.
  type Info struct {
  	Container   string   `json:"container"`
-@@ -117,3 +123,24 @@ func Arm(path string) {
+@@ -121,3 +127,24 @@ func Arm(path string) {
  	}
  	_, _ = getxattr(path, attrArm)
  }
