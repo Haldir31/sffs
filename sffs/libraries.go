@@ -1,0 +1,120 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"time"
+)
+
+// Création des bibliothèques sffs dans Silo (SFFS_SILO_LIBRARIES=1) : dès que la clé d'API Silo
+// existe (créée après le compte admin), une bibliothèque de films et une de séries sont créées si
+// aucune bibliothèque ne contient déjà ces dossiers. Une seule fois : le fichier repère
+// (SFFS_SILO_LIBRARIES_DONE) évite de recréer une bibliothèque supprimée volontairement.
+//
+//	SFFS_SILO_LIBRARIES_LANG          langue des métadonnées (défaut fr)
+//	SFFS_SILO_FILMS_NAME / _SERIES_NAME  noms des bibliothèques (défaut Films, Séries)
+
+type siloLibrary struct {
+	Paths []string `json:"paths"`
+}
+
+type libraryWanted struct {
+	path, kind, name string
+}
+
+func (s *siloNotifier) libraryLoop(series bool) {
+	if os.Getenv("SFFS_SILO_LIBRARIES") != "1" || s == nil || s.wc.siloURL == "" {
+		return
+	}
+	done := os.Getenv("SFFS_SILO_LIBRARIES_DONE")
+	if done != "" {
+		if _, err := os.Stat(done); err == nil {
+			return
+		}
+	}
+	want := []libraryWanted{{s.wc.siloFilms, "movies", envOr("SFFS_SILO_FILMS_NAME", "Films")}}
+	if series {
+		want = append(want, libraryWanted{s.wc.siloSeries, "series", envOr("SFFS_SILO_SERIES_NAME", "Séries")})
+	}
+	lang := envOr("SFFS_SILO_LIBRARIES_LANG", "fr")
+	for {
+		if s.key() != "" {
+			err := s.ensureLibraries(want, lang)
+			if err == nil {
+				if done != "" {
+					_ = os.WriteFile(done, []byte(time.Now().Format(time.RFC3339)+"\n"), 0o644)
+				}
+				return
+			}
+			log.Printf("silo : bibliothèques non créées, nouvel essai dans une minute (%v)", err)
+		}
+		time.Sleep(time.Minute)
+	}
+}
+
+func (s *siloNotifier) ensureLibraries(want []libraryWanted, lang string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	var libs []siloLibrary
+	if err := s.api(ctx, http.MethodGet, "/api/v1/libraries", nil, &libs); err != nil {
+		return err
+	}
+	have := map[string]bool{}
+	for _, l := range libs {
+		for _, p := range l.Paths {
+			have[p] = true
+		}
+	}
+	for _, w := range want {
+		if have[w.path] {
+			continue
+		}
+		body := map[string]any{"paths": []string{w.path}, "type": w.kind, "name": w.name, "metadata_language": lang}
+		if err := s.api(ctx, http.MethodPost, "/api/v1/libraries", body, nil); err != nil {
+			return fmt.Errorf("création de %s : %w", w.name, err)
+		}
+		log.Printf("silo : bibliothèque %q créée (%s)", w.name, w.path)
+	}
+	return nil
+}
+
+func (s *siloNotifier) api(ctx context.Context, method, path string, in, out any) error {
+	var body bytes.Buffer
+	if in != nil {
+		if err := json.NewEncoder(&body).Encode(in); err != nil {
+			return err
+		}
+	}
+	req, err := http.NewRequestWithContext(ctx, method, s.wc.siloURL+path, &body)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+s.key())
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := s.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		var b bytes.Buffer
+		_, _ = b.ReadFrom(resp.Body)
+		return fmt.Errorf("%s %s : statut %d %.200s", method, path, resp.StatusCode, b.String())
+	}
+	if out != nil {
+		return json.NewDecoder(resp.Body).Decode(out)
+	}
+	return nil
+}
+
+func envOr(name, def string) string {
+	if v := os.Getenv(name); v != "" {
+		return v
+	}
+	return def
+}

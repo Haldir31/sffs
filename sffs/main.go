@@ -1461,6 +1461,7 @@ func main() {
 		log.Fatalf("montage %s: %v", cfg.mount, err)
 	}
 	log.Printf("monté sur %s", cfg.mount)
+	go silo.libraryLoop(cfg.series)
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)

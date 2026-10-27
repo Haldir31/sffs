@@ -24,9 +24,14 @@
    puis la plus proche. L'attribut `user.sf.served` donne alors le hash de la version réellement servie, et
    Silo analyse cette remplaçante avant de choisir comment lire. Si l'original repasse en cache, sffs y revient.
 7. **Mises à jour.** Chaque minute (`SFFS_WATCH`), sffs cherche les sources ajoutées ou modifiées dans
-   StreamFusion (`updated_at`), recharge seulement les titres concernés et met à jour l'arborescence **sans
-   démonter**. Il demande ensuite à Silo un scan limité aux dossiers modifiés (`POST /api/v2/scan` avec `path`).
+   StreamFusion, recharge seulement les titres concernés et met à jour l'arborescence **sans démonter**. Il
+   repère les lignes par leur numéro de transaction Postgres (`xmin`), pas par `updated_at` : les torrents
+   reçus par la synchronisation de StreamFusion gardent la date de leur source et ne seraient jamais vus.
+   Il demande ensuite à Silo un scan limité aux dossiers modifiés (`POST /api/v2/scan` avec `path`).
    Un rechargement complet a lieu toutes les `SFFS_RELOAD` (24 h) par sécurité.
+8. **Bibliothèques Silo** (`SFFS_SILO_LIBRARIES=1`, application SSDV2) : dès que la clé d'API Silo existe,
+   sffs crée les bibliothèques **Films** et **Séries** (métadonnées en français, `SFFS_SILO_LIBRARIES_LANG`)
+   si aucune ne contient déjà ses dossiers. Une seule fois : une bibliothèque supprimée n'est pas recréée.
 
 ## Sélection des versions
 
@@ -68,6 +73,8 @@
 | `SFFS_RELOAD` | Rechargement complet (`0` = jamais) | `24h` |
 | `SFFS_SILO_URL`, `SFFS_SILO_KEY` | API Silo pour les scans ciblés (vide = désactivé) | |
 | `SFFS_SILO_KEY_FILE` | Fichier de la clé Silo, relu à chaque passage (si `SFFS_SILO_KEY` est vide) : la clé peut être créée après le démarrage | |
+| `SFFS_SILO_LIBRARIES` | `1` : créer les bibliothèques Films et Séries dans Silo, une seule fois (repère : `SFFS_SILO_LIBRARIES_DONE`) | |
+| `SFFS_SILO_LIBRARIES_LANG`, `SFFS_SILO_FILMS_NAME`, `SFFS_SILO_SERIES_NAME` | Langue des métadonnées et noms des bibliothèques créées | `fr`, `Films`, `Séries` |
 | `SFFS_SILO_FILMS`, `SFFS_SILO_SERIES` | Chemins des dossiers vus par Silo | `/mnt/sf/films`, `/mnt/sf/series` (SSDV2 : `/mnt/sffs/films`, `/mnt/sffs/series`) |
 | `SFFS_DRY_RUN`, `SFFS_DRY_LIST` | Charger sans monter, et lister les versions retenues | |
 

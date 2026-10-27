@@ -49,7 +49,14 @@ func loadWatchConfig() watchConfig {
 	return w
 }
 
-// watermark renvoie le updated_at le plus récent de la base (point de départ de la surveillance).
+// La surveillance repère les lignes nouvelles ou modifiées par leur numéro de transaction Postgres
+// (xmin), pas par updated_at : les torrents reçus par la synchronisation de StreamFusion gardent la
+// date de leur source, plus ancienne, et ne seraient jamais vus. xmin change à chaque écriture.
+//
+// Le repère wm est un numéro de transaction sur 64 bits (pg_snapshot_xmin : toute transaction
+// antérieure est terminée). xmin n'a que 32 bits : la requête en tient compte s'il a rebouclé.
+
+// watermark renvoie le repère de départ de la surveillance.
 func watermark(ctx context.Context, dsn string) (int64, error) {
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
@@ -57,38 +64,43 @@ func watermark(ctx context.Context, dsn string) (int64, error) {
 	}
 	defer conn.Close(context.Background())
 	var wm int64
-	err = conn.QueryRow(ctx, `select coalesce(max(updated_at),0) from torrent_items`).Scan(&wm)
+	err = conn.QueryRow(ctx, `select pg_snapshot_xmin(pg_current_snapshot())::text::bigint`).Scan(&wm)
 	return wm, err
 }
 
-// changedSince liste les films et séries dont une source a été ajoutée ou modifiée après wm.
+// changedSince liste les films et séries dont une source a été ajoutée ou modifiée depuis le repère wm,
+// et renvoie le repère suivant.
 func changedSince(ctx context.Context, dsn string, wm int64) (movies, shows []int64, newWM int64, err error) {
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		return nil, nil, wm, err
 	}
 	defer conn.Close(context.Background())
-	// Petit recouvrement (5 s) : une ligne écrite pendant la requête précédente n'est pas perdue.
-	rows, err := conn.Query(ctx, `select tmdb_id, type, coalesce(tmdb_media_type,''), updated_at
+	// Repère suivant pris avant la lecture : une transaction encore en cours a un numéro au moins
+	// égal, elle sera vue au passage suivant. Une ligne vue deux fois ne coûte qu'un rechargement.
+	var xmax int64
+	if err := conn.QueryRow(ctx, `select pg_snapshot_xmin(s)::text::bigint, pg_snapshot_xmax(s)::text::bigint
+	                                from pg_current_snapshot() s`).Scan(&newWM, &xmax); err != nil {
+		return nil, nil, wm, err
+	}
+	lo, hi := wm&0xffffffff, xmax&0xffffffff
+	wrapped := wm>>32 != xmax>>32 // les numéros sur 32 bits ont rebouclé depuis wm
+	rows, err := conn.Query(ctx, `select tmdb_id, type, coalesce(tmdb_media_type,'')
 	                                from torrent_items
-	                               where updated_at > $1 and tmdb_id is not null and coalesce(btrim(info_hash),'') <> ''`, wm-5)
+	                               where (xmin::text::bigint >= $1 or ($3 and xmin::text::bigint < $2))
+	                                 and tmdb_id is not null and coalesce(btrim(info_hash),'') <> ''`, lo, hi, wrapped)
 	if err != nil {
 		return nil, nil, wm, err
 	}
 	defer rows.Close()
-	newWM = wm
 	mset, sset := map[int64]bool{}, map[int64]bool{}
 	for rows.Next() {
 		var (
-			id        int32
-			typ, mt   string
-			updatedAt int64
+			id      int32
+			typ, mt string
 		)
-		if err := rows.Scan(&id, &typ, &mt, &updatedAt); err != nil {
+		if err := rows.Scan(&id, &typ, &mt); err != nil {
 			return nil, nil, wm, err
-		}
-		if updatedAt > newWM {
-			newWM = updatedAt
 		}
 		switch {
 		case typ == "movie":
