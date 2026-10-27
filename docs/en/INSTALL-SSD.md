@@ -69,7 +69,9 @@ Secrets: `<SETTINGS_STORAGE>/docker/<user>/sffs-secrets/` (mode 0600), generated
    Traefik authentication).
 2. **Admin account**: a new Silo gets it automatically, with the SSDV2 user name and password (like the other
    catalogue apps). If the SSDV2 password is shorter than 8 characters (Silo's minimum), create the account
-   in the web interface, then restart the sffs app.
+   in the web interface, then restart the sffs app. Then finish the **first-run setup wizard**:
+   `https://<subdomain>.<domain>/setup`, signed in with that account (some online lookups, such as intro
+   markers, wait for it to be finished).
 3. **Libraries**: sffs creates **Films** (`/mnt/sffs/films`) and **Séries** (`/mnt/sffs/series`) itself,
    with French metadata, as soon as its Silo API key exists and `/mnt/sffs` is mounted (1 to 20 minutes after
    installation, depending on the TMDB cache). Only once: a library that was deleted is not recreated.

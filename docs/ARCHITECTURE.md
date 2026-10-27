@@ -37,6 +37,8 @@
 8. **Bibliothèques Silo** (`SFFS_SILO_LIBRARIES=1`, application SSDV2) : dès que la clé d'API Silo existe,
    sffs crée les bibliothèques **Films** et **Séries** (métadonnées en français, `SFFS_SILO_LIBRARIES_LANG`)
    si aucune ne contient déjà ses dossiers. Une seule fois : une bibliothèque supprimée n'est pas recréée.
+   Elles sont créées sans surveillance en temps réel (sffs prévient Silo lui-même ; sur 160 000 fichiers la
+   file d'événements du noyau déborde) et sans le fournisseur de métadonnées NFO (aucun `.nfo` à côté des fichiers).
 9. **Auto-réparation.** Chaque minute, sffs vérifie son montage ; après 3 échecs de suite, il s'arrête et
    Docker le relance (le démarrage nettoie le montage mort). Toutes les 5 minutes, une bibliothèque sffs que
    Silo a marquée injoignable (`dead_root`, typiquement après un redémarrage de sffs pendant un scan) voit son

@@ -77,13 +77,42 @@ func (s *siloNotifier) ensureLibraries(want []libraryWanted, lang string) error 
 		if have[w.path] {
 			continue
 		}
-		body := map[string]any{"paths": []string{w.path}, "type": w.kind, "name": w.name, "metadata_language": lang}
-		if err := s.api(ctx, http.MethodPost, "/api/v1/libraries", body, nil); err != nil {
+		// Pas de surveillance en temps réel : sffs prévient Silo des nouveautés lui-même, et sur
+		// 160 000 fichiers la file d'événements du noyau déborde et déclenche des rescans complets.
+		body := map[string]any{"paths": []string{w.path}, "type": w.kind, "name": w.name,
+			"metadata_language": lang, "realtime_monitoring": false}
+		var created struct {
+			ID string `json:"id"`
+		}
+		if err := s.api(ctx, http.MethodPost, "/api/v2/libraries", body, &created); err != nil {
 			return fmt.Errorf("création de %s : %w", w.name, err)
 		}
 		log.Printf("silo : bibliothèque %q créée (%s)", w.name, w.path)
+		if err := s.disableNFO(ctx, created.ID); err != nil {
+			log.Printf("silo : bibliothèque %q : fournisseur NFO non désactivé : %v", w.name, err)
+		}
 	}
 	return nil
+}
+
+// disableNFO retire le fournisseur de métadonnées NFO de la chaîne de la bibliothèque : il n'y a
+// jamais de fichier .nfo à côté des fichiers sffs, et chaque recherche échouée encombre les journaux.
+func (s *siloNotifier) disableNFO(ctx context.Context, id string) error {
+	path := "/api/v1/libraries/" + id + "/providers"
+	var chain struct {
+		Levels map[string][]map[string]any `json:"levels"`
+	}
+	if err := s.api(ctx, http.MethodGet, path, nil, &chain); err != nil {
+		return err
+	}
+	for _, entries := range chain.Levels {
+		for _, e := range entries {
+			if e["capability_id"] == "nfo" {
+				e["enabled"] = false
+			}
+		}
+	}
+	return s.api(ctx, http.MethodPut, path, chain, nil)
 }
 
 func (s *siloNotifier) api(ctx context.Context, method, path string, in, out any) error {

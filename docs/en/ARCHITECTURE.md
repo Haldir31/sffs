@@ -35,7 +35,9 @@
    A full reload runs every `SFFS_RELOAD` (24 h) as a safety net.
 8. **Silo libraries** (`SFFS_SILO_LIBRARIES=1`, SSDV2 app): as soon as the Silo API key exists, sffs creates
    the **Films** and **Séries** libraries (French metadata, `SFFS_SILO_LIBRARIES_LANG`) if no library already
-   contains its folders. Only once: a library that was deleted is not recreated.
+   contains its folders. Only once: a library that was deleted is not recreated. They are created without
+   real-time monitoring (sffs notifies Silo itself; with 160,000 files the kernel event queue overflows) and
+   without the NFO metadata provider (there is never a `.nfo` next to the files).
 9. **Self-healing.** Every minute, sffs checks its mount; after 3 failures in a row it exits and Docker
    restarts it (startup cleans the dead mount). Every 5 minutes, an sffs library that Silo marked unreachable
    (`dead_root`, typically after an sffs restart during a scan) gets its scan restarted as soon as its folder

@@ -51,3 +51,46 @@ func TestHealLoopRescansDeadRoot(t *testing.T) {
 		}
 	}
 }
+
+func TestEnsureLibrariesV2(t *testing.T) {
+	var mu sync.Mutex
+	var created []map[string]any
+	var chainPut map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/libraries":
+			_, _ = w.Write([]byte("[]"))
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v2/libraries":
+			var b map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&b)
+			created = append(created, b)
+			_, _ = w.Write([]byte(`{"id":"7"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/libraries/7/providers":
+			_, _ = w.Write([]byte(`{"levels":{"movie":[{"capability_id":"nfo","enabled":true},{"capability_id":"tmdb","enabled":true}]}}`))
+		case r.Method == http.MethodPut && r.URL.Path == "/api/v1/libraries/7/providers":
+			_ = json.NewDecoder(r.Body).Decode(&chainPut)
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	s := newSiloNotifier(watchConfig{siloURL: srv.URL, siloKey: "sa_test"})
+	if err := s.ensureLibraries([]libraryWanted{{"/mnt/sffs/films", "movies", "Films"}}, "fr"); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(created) != 1 || created[0]["realtime_monitoring"] != false || created[0]["metadata_language"] != "fr" {
+		t.Fatalf("création : %v", created)
+	}
+	levels := chainPut["levels"].(map[string]any)["movie"].([]any)
+	for _, e := range levels {
+		m := e.(map[string]any)
+		if want := m["capability_id"] != "nfo"; m["enabled"] != want {
+			t.Fatalf("chaîne envoyée : %v", levels)
+		}
+	}
+}

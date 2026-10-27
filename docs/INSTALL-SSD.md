@@ -68,7 +68,9 @@ Secrets : `<SETTINGS_STORAGE>/docker/<user>/sffs-secrets/` (droits 0600), géné
    Jellyfin ne savent pas passer une authentification Traefik).
 2. **Compte admin** : un Silo nouveau le reçoit automatiquement, avec l'identifiant et le mot de passe de
    SSDV2 (comme les autres applications du catalogue). Si le mot de passe SSDV2 fait moins de 8 caractères
-   (minimum de Silo), crée le compte dans l'interface web, puis relance l'application sffs.
+   (minimum de Silo), crée le compte dans l'interface web, puis relance l'application sffs. Termine ensuite
+   l'**assistant de première configuration** : `https://<sous-domaine>.<domaine>/setup`, connecté avec ce compte
+   (certaines recherches en ligne, comme les marqueurs de générique, attendent qu'il soit terminé).
 3. **Bibliothèques** : sffs crée lui-même **Films** (`/mnt/sffs/films`) et **Séries** (`/mnt/sffs/series`),
    métadonnées en français, dès que sa clé d'API Silo existe et que `/mnt/sffs` est monté (1 à 20 minutes
    après l'installation selon le cache TMDB). Une seule fois : une bibliothèque supprimée n'est pas recréée.
