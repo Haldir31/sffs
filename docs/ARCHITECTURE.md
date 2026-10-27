@@ -42,7 +42,8 @@
 
 1. **Écartés :** doublons (même torrent proposé par plusieurs indexeurs), CAM, TS, TC, screener, R5, 3D, et
    images disque (ISO, BDMV, COMPLETE/Full BluRay, BD25/50/66/100, M2TS), que Silo ne sait pas lire.
-   Avec `SFFS_CACHED_ONLY=1`, les versions qui ne sont pas vues en cache.
+   Selon les réglages : les REMUX (`SFFS_REMUX=0`), les encodages légers HDLight, 4KLight, mHD… (écartés par
+   défaut, `SFFS_LIGHT=1` pour les garder), et avec `SFFS_CACHED_ONLY=1` les versions qui ne sont pas vues en cache.
    Pour un film, une version dont l'année s'écarte de plus d'un an de celle du film est aussi écartée.
 2. **Langue d'abord.** Seule la meilleure langue de `SFFS_LANGS` présente pour ce titre est gardée. Elle est
    détectée dans le nom (FRENCH, TRUEFRENCH, VFF, VFQ, VFI, VF2, MULTI…) ou dans les langues relevées par
@@ -52,7 +53,8 @@
    `known-cached.json`), puis celles qui ont le plus de seeders.
 4. **Quotas par qualité :** 2160p, 1080p et 720p ; le SD et la qualité inconnue sont exclus s'il existe du HD.
    Films : `SFFS_PER_QUALITY` (5). Épisodes : `SFFS_SERIES_PER_QUALITY` (2).
-   **Une remux 4K et une remux 1080p sont toujours gardées s'il en existe une** dans la bonne langue.
+   **Une remux 4K et une remux 1080p sont toujours gardées s'il en existe une** dans la bonne langue
+   (sauf avec `SFFS_REMUX=0`).
 
 ## Réglages de sffs
 
@@ -72,6 +74,8 @@
 | `SFFS_TMDB` | Limiter aux films listés (IDs TMDB, tests) | tous |
 | `SFFS_SERIES` | Exposer aussi les séries | `0` |
 | `SFFS_SERIES_PER_QUALITY` | Versions par qualité et par épisode | `2` |
+| `SFFS_REMUX` | `0` : écarter les REMUX (et ne plus en garder d'office) | `1` |
+| `SFFS_LIGHT` | `1` : garder les encodages légers (HDLight, 4KLight, UHDLight, mHD, miniHD, « BluRay.Light »…) | `0` |
 | `SFFS_CACHED_ONLY` | `1` : seulement les versions vues en cache chez le débrideur (colonne `availability` de StreamFusion, ou torrents déjà vus en cache par sffs) ; un titre sans version en cache n'apparaît pas. L'état du cache entre dans l'empreinte de la surveillance : une version qui passe en cache fait apparaître son titre | `0` |
 | `SFFS_SERIES_TMDB` | Limiter aux séries listées | toutes |
 | `SFFS_TMDB_KEY` | Clé API TMDB (obligatoire avec les séries) | |

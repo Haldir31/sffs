@@ -40,3 +40,31 @@ func TestCachedOnly(t *testing.T) {
 		t.Fatalf("mode normal : %d versions, attendu 3", len(got))
 	}
 }
+
+func TestLightAndRemux(t *testing.T) {
+	light := map[string]bool{
+		"1917.2019.MULTI.VFF.1080p.BluRay.HDLight.AC3.5.1.x265-XSHD":         true,
+		"1917.2019.MULTI.VFF.2160p.4KLight.HDR10Plus.EAC3.5.1.x265-Neostark": true,
+		"Film.2020.MULTI.1080p.mHD.x264.AC3":                                 true,
+		"Romeo.&.Juliet.1968.MULTi.VFF.1080p.BluRay.Light.AC3.x264-ZT":       true,
+		"La.Traversee.2022.VFF.1080p.LIGHT.BLURAY.x264.DDP-SbR":              true,
+		"A.Small.Light.S01E07.MULTi.1080p.WEB.H264-FW":                       false,
+		"Charmed.2018.S03E15.FRENCH.LD.AMZN.WEB-DL.x264-FRATERNiTY":          false,
+		"Lightyear.2022.MULTi.2160p.UHD.BluRay.Remux.HDR.HEVC":               false,
+	}
+	for raw, want := range light {
+		if got := isLight(raw, ""); got != want {
+			t.Errorf("isLight(%s) = %v, attendu %v", raw, got, want)
+		}
+	}
+	remux := "Alien.Predator.2018.FRENCH.1080p.BluRay.Remux.AVC.DTS.HDMA.5.1-Shamir"
+	hdl := "1917.2019.MULTI.VFF.1080p.BluRay.HDLight.AC3.5.1.x265-XSHD"
+	plain := "12.Strong.2018.FRENCH.720p.BluRay.x264-VENUE"
+	def := config{remux: true}
+	if excludedByChoice(def, remux, "") || !excludedByChoice(def, hdl, "") || excludedByChoice(def, plain, "") {
+		t.Error("réglages par défaut : REMUX gardé, encodage léger écarté, autres gardés")
+	}
+	if !excludedByChoice(config{remux: false, light: true}, remux, "") || excludedByChoice(config{remux: false, light: true}, hdl, "") {
+		t.Error("SFFS_REMUX=0 SFFS_LIGHT=1 : REMUX écarté, encodage léger gardé")
+	}
+}

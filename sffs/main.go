@@ -57,6 +57,8 @@ type config struct {
 	perQuality  int      // releases gardées par qualité (SFFS_PER_QUALITY, défaut 5, 0 = toutes)
 	requireHD   bool     // SFFS_REQUIRE_PREFERRED_HD=1 : écarte les films sans version HD dans une langue préférée
 	cachedOnly  bool     // SFFS_CACHED_ONLY=1 : seulement les versions vues en cache (StreamFusion ou sffs)
+	remux       bool     // SFFS_REMUX (défaut 1) : 0 = écarter les REMUX
+	light       bool     // SFFS_LIGHT (défaut 0) : 1 = garder les encodages légers (HDLight, 4KLight, mHD…)
 
 	series           bool          // SFFS_SERIES=1 : expose aussi les séries sous series/
 	seriesTmdb       []int64       // SFFS_SERIES_TMDB : séries limitées à ces IDs (vide = toutes)
@@ -119,6 +121,8 @@ func loadConfig() config {
 	}
 	c.requireHD = os.Getenv("SFFS_REQUIRE_PREFERRED_HD") == "1"
 	c.cachedOnly = os.Getenv("SFFS_CACHED_ONLY") == "1"
+	c.remux = os.Getenv("SFFS_REMUX") != "0"
+	c.light = os.Getenv("SFFS_LIGHT") == "1"
 
 	c.series = os.Getenv("SFFS_SERIES") == "1"
 	c.seriesTmdb = parseIDs("SFFS_SERIES_TMDB")
@@ -297,7 +301,7 @@ func loadMovies(ctx context.Context, cfg config) ([]*movie, error) {
 
 		var pd parsedData
 		_ = json.Unmarshal([]byte(parsed), &pd)
-		if unplayable(raw, pd.Quality) {
+		if unplayable(raw, pd.Quality) || excludedByChoice(cfg, raw, pd.Quality) {
 			continue // CAM, TS, screener…
 		}
 
@@ -416,6 +420,21 @@ var badQuality = regexp.MustCompile(`\b(cam|camrip|hdcam|ts|hdts|telesync|tc|tel
 // Images disque (ISO, BDMV, COMPLETE BLURAY, Full BluRay…) : ni ffprobe ni Silo ne savent les lire, et une
 // analyse à la lecture téléchargerait le début d'un fichier de plusieurs dizaines de Go.
 var discImage = regexp.MustCompile(`(^|[^a-z0-9])(iso|bdmv|bd25|bd50|bd66|bd100|m2ts|(complete|full)[ ._-]*(uhd[ ._-]*)?blu-?ray|full[ ._-]*bd|disc[ ._-]?[0-9])([^a-z0-9]|$)`)
+
+// Encodages légers (HDLight, 4KLight, mHD…) : seulement les formes sans ambiguïté. « LD » (Line
+// Dubbed) est un doublage, et « Light » ou « Small » seuls peuvent faire partie du titre.
+var lightEncode = regexp.MustCompile(`(^|[^a-z0-9])((hd|4k|uhd|ultra)[ ._-]?light|mhd|mini[ ._-]?(hd|4k)|` +
+	`(blu-?ray|1080p|720p|2160p|web(rip|-?dl)?)[ ._-]light|light[ ._-](blu-?ray|ac3|eac3|x26[45]|hevc))([^a-z0-9]|$)`)
+
+// isLight : encodage léger (titre ou qualité détectée par StreamFusion).
+func isLight(raw, quality string) bool {
+	return lightEncode.MatchString(strings.ToLower(quality + " " + raw))
+}
+
+// excludedByChoice : release écartée par les réglages (REMUX, encodages légers).
+func excludedByChoice(cfg config, raw, quality string) bool {
+	return (!cfg.remux && isRemux(raw, quality)) || (!cfg.light && isLight(raw, quality))
+}
 
 // unplayable : release à écarter (mauvaise qualité ou image disque).
 func unplayable(raw, quality string) bool {

@@ -94,6 +94,8 @@ jour sur place, et Silo voit les changements à son prochain scan.
 | `sffs_per_quality` | `5` | Versions gardées par qualité (2160p, 1080p, 720p…) pour un film |
 | `sffs_series` | `1` | `0` : films seulement |
 | `sffs_series_per_quality` | `2` | Versions par qualité et par épisode |
+| `sffs_remux` | `1` | `0` : pas de REMUX (fichiers plus petits, moins de 4K de qualité disque) |
+| `sffs_light` | `0` | `1` : proposer aussi les encodages légers (HDLight, 4KLight, mHD…) |
 | `sffs_cached_only` | `0` | `1` : **seulement les versions déjà en cache chez AllDebrid**. Voir ci-dessous |
 | `sffs_repo`, `sffs_repo_version` | ce dépôt, `main` | Sources de sffs et des patchs Silo |
 | `sffs_registry` | `ghcr.io/haldir31` | Registre des images ; vide : construction sur le serveur |
@@ -101,8 +103,8 @@ jour sur place, et Silo voit les changements à son prochain scan.
 | `sffs_alldebrid_key` | | Clé AllDebrid, si decypharr n'est pas installé et qu'on ne veut pas de question |
 | `sffs_debrid_proxy_override` | proxy de StreamFusion | Proxy des lectures chez AllDebrid ; `''` pour aucun |
 
-Toujours appliqué, sans option : au moins un REMUX 2160p et un REMUX 1080p quand il en existe, et jamais de
-CAM, screener, 3D ni d'image disque (ISO, BDMV, COMPLETE/Full BluRay…), que Silo ne sait pas lire.
+Toujours appliqué, sans option : au moins un REMUX 2160p et un REMUX 1080p quand il en existe (si
+`sffs_remux` vaut `1`), et jamais de CAM, screener, 3D ni d'image disque (ISO, BDMV, COMPLETE/Full BluRay…), que Silo ne sait pas lire.
 
 ### Mode « en cache seulement » (`sffs_cached_only: '1'`)
 

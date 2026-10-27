@@ -41,8 +41,9 @@
 
 1. **Discarded:** duplicates (same torrent offered by several indexers), CAM, TS, TC, screener, R5, 3D, and
    disc images (ISO, BDMV, COMPLETE/Full BluRay, BD25/50/66/100, M2TS), which Silo cannot play. For a movie,
-   a version whose year is more than one year away from the movie's year is also discarded. With
-   `SFFS_CACHED_ONLY=1`, versions not seen in cache are discarded too.
+   a version whose year is more than one year away from the movie's year is also discarded. Depending on
+   the settings: REMUX releases (`SFFS_REMUX=0`), light encodes such as HDLight, 4KLight, mHD (discarded by
+   default, `SFFS_LIGHT=1` keeps them), and with `SFFS_CACHED_ONLY=1` versions not seen in cache.
 2. **Language first.** Only the best language of `SFFS_LANGS` available for the title is kept. It is detected
    in the name (FRENCH, TRUEFRENCH, VFF, VFQ, VFI, VF2, MULTI…) or in the languages found by StreamFusion.
    With `SFFS_REQUIRE_PREFERRED_HD=1`, a title without any version in a preferred language is not shown.
@@ -50,7 +51,8 @@
    then those with the most seeders.
 4. **Quotas per quality:** 2160p, 1080p and 720p; SD and unknown quality are excluded when HD exists.
    Movies: `SFFS_PER_QUALITY` (5). Episodes: `SFFS_SERIES_PER_QUALITY` (2).
-   **A 4K remux and a 1080p remux are always kept when one exists** in the right language.
+   **A 4K remux and a 1080p remux are always kept when one exists** in the right language (unless
+   `SFFS_REMUX=0`).
 
 ## sffs settings
 
@@ -70,6 +72,8 @@
 | `SFFS_TMDB` | Only the listed movies (TMDB IDs, tests) | all |
 | `SFFS_SERIES` | Also expose TV shows | `0` |
 | `SFFS_SERIES_PER_QUALITY` | Versions per quality and per episode | `2` |
+| `SFFS_REMUX` | `0`: discard REMUX releases (and stop always keeping one) | `1` |
+| `SFFS_LIGHT` | `1`: keep light encodes (HDLight, 4KLight, UHDLight, mHD, miniHD, "BluRay.Light"…) | `0` |
 | `SFFS_CACHED_ONLY` | `1`: only versions seen in cache at the debrid service (StreamFusion `availability` column, or torrents already seen cached by sffs); a title without a cached version is not shown. The cache status is part of the watch fingerprint: a version that becomes cached makes its title appear | `0` |
 | `SFFS_SERIES_TMDB` | Only the listed shows | all |
 | `SFFS_TMDB_KEY` | TMDB API key (required with TV shows) | |
