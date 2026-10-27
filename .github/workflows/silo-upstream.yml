@@ -1,0 +1,25 @@
+# Chaque semaine : les patchs s'appliquent-ils encore sur la dernière version de Silo officiel ?
+# Un échec signale qu'il faut les reporter (voir CLAUDE.md, « Silo modifié »).
+name: silo-upstream
+
+on:
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  patches:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Appliquer les patchs sur Silo officiel (main)
+        run: |
+          git clone -q https://github.com/Silo-Server/silo-server.git "$RUNNER_TEMP/silo"
+          cd "$RUNNER_TEMP/silo"
+          echo "Silo officiel : $(git log -1 --format='%h %ci %s')"
+          echo "Base des patchs : $(cat "$GITHUB_WORKSPACE/silo/BASE_COMMIT")"
+          echo "Commits depuis la base : $(git rev-list --count "$(cat "$GITHUB_WORKSPACE/silo/BASE_COMMIT")"..HEAD)"
+          git -c user.name=ci -c user.email=ci@localhost am -3 "$GITHUB_WORKSPACE"/silo/patches/*.patch

@@ -9,6 +9,7 @@
 #   SILO_IMAGE        défaut localhost/silo-sffs:latest
 #   SILO_SRC          clone de travail de Silo (défaut ~/.cache/sffs-build/silo-server)
 #   SILO_BASE         commit amont sur lequel appliquer les patchs (défaut : silo/BASE_COMMIT, testé)
+#   IMAGE_SOURCE      URL du dépôt, ajoutée en étiquette org.opencontainers.image.source (publication)
 #
 # Silo : clone officiel -> commit SILO_BASE -> patchs silo/patches/*.patch -> image.
 # Compter 5 à 15 min pour Silo, 1 à 2 min pour sffs.
@@ -28,10 +29,12 @@ SILO_BASE=${SILO_BASE:-$(cat "$REPO/silo/BASE_COMMIT")}
 # Empreinte git du dossier source (vide hors dépôt git) : SSDV2 ne reconstruit une image que si
 # elle a changé.
 tree() { git -C "$REPO" rev-parse "HEAD:$1" 2>/dev/null || true; }
+src_label=()
+[ -n "${IMAGE_SOURCE:-}" ] && src_label=(--label "org.opencontainers.image.source=$IMAGE_SOURCE")
 
 build_sffs() {
   echo "== sffs -> $SFFS_IMAGE ($ENGINE)"
-  "$ENGINE" build --label sffs.tree="$(tree sffs)" -t "$SFFS_IMAGE" "$REPO/sffs"
+  "$ENGINE" build "${src_label[@]}" --label sffs.tree="$(tree sffs)" -t "$SFFS_IMAGE" "$REPO/sffs"
 }
 
 build_silo() {
@@ -55,7 +58,7 @@ build_silo() {
   # Dernière migration de base connue : l'installation SSDV2 refuse une base déjà migrée plus loin.
   mig=$(ls migrations/sql | sed -n 's/^\([0-9]\{14\}\)_.*\.sql$/\1/p' | sort | tail -1)
   "$ENGINE" build -f "$REPO/silo/Dockerfile.sffs" \
-    --label sffs.silo.base="$SILO_BASE" --label sffs.silo.migration="$mig" --label sffs.tree="$(tree silo)" \
+    "${src_label[@]}" --label sffs.silo.base="$SILO_BASE" --label sffs.silo.migration="$mig" --label sffs.tree="$(tree silo)" \
     --build-arg BUILD_REVISION="$(git rev-parse --short HEAD)" \
     --build-arg BUILD_DATE="$(date -u +%FT%TZ)" \
     -t "$SILO_IMAGE" .

@@ -1,0 +1,58 @@
+# Construit et publie les images sffs et Silo modifié (amd64 + arm64) sur ghcr.io.
+# L'application sffs de SSDV2 les télécharge au lieu de les construire, quand leur étiquette
+# sffs.tree correspond aux sources qu'elle a clonées.
+name: images
+
+on:
+  push:
+    branches: [main]
+    paths: ['sffs/**', 'silo/**', 'build-images.sh', '.github/workflows/images.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io/${{ github.repository_owner }}
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Connexion à ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Construire
+        env:
+          CONTAINER_ENGINE: docker
+          IMAGE_SOURCE: https://github.com/${{ github.repository }}
+        run: |
+          reg=$(echo "$REGISTRY" | tr '[:upper:]' '[:lower:]')
+          SFFS_IMAGE=$reg/sffs:latest-${{ matrix.arch }} SILO_IMAGE=$reg/silo-sffs:latest-${{ matrix.arch }} \
+            SILO_SRC=$RUNNER_TEMP/silo-server ./build-images.sh all
+      - name: Publier
+        run: |
+          reg=$(echo "$REGISTRY" | tr '[:upper:]' '[:lower:]')
+          docker push $reg/sffs:latest-${{ matrix.arch }}
+          docker push $reg/silo-sffs:latest-${{ matrix.arch }}
+
+  manifest:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Connexion à ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Image multi-architecture :latest
+        run: |
+          reg=$(echo "$REGISTRY" | tr '[:upper:]' '[:lower:]')
+          for name in sffs silo-sffs; do
+            docker buildx imagetools create -t $reg/$name:latest $reg/$name:latest-amd64 $reg/$name:latest-arm64
+          done

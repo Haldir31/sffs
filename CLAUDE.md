@@ -5,7 +5,7 @@ Réponses en français. Lire aussi `README.md` et `docs/` (ARCHITECTURE, INSTALL
 ## Ce que fait le projet
 
 StreamFusion (addon Stremio, base Postgres de torrents AllDebrid) → **sffs** (Go, go-fuse + pgx)
-présente les films/séries comme des fichiers virtuels → **Silo modifié** (application `silosffs` de SSDV2, image `localhost/silo-sffs`) les scanne et
+présente les films/séries comme des fichiers virtuels → **Silo modifié** (application `silo` de SSDV2 patchée par l'application `sffs`, image `localhost/silo-sffs`) les scanne et
 les lit. Les octets ne sont lus chez AllDebrid qu'au moment d'une lecture.
 
 - **Garde-fou** : un fichier ne s'ouvre que s'il a été « armé » (getxattr `user.sf.arm`), ce que
@@ -40,23 +40,24 @@ montage mort (« Transport endpoint is not connected »). Il faut monter un doss
 `/mnt` doit être `shared`. L'entrypoint démonte les montages FUSE morts sur `SFFS_MOUNT` (et rien d'autre).
 Compose/Podman gardent l'ancienne disposition (`/mnt/sffs/sf`, vu comme `/mnt/sf` dans Silo).
 
-## Installation SSDV2 (application `silosffs` du catalogue)
+## Installation SSDV2 (applications `silo` et `sffs` du catalogue)
 
-- Définie dans le fork SSDV2 (`~/ssdv2-fork`, branche `feat/silo`) : `includes/dockerapps/{vars,pretasks,posttasks}/silosffs.yml`,
-  à côté de `silo` (Silo officiel classique). Les deux reprennent le mapping de Plex (`~/Medias`,
-  `~/local`, `/data`, `/mnt` rslave, en lecture seule). Plus de scripts `ssd/` dans ce dépôt.
-- La pretask clone ce dépôt dans `<STORAGE>/docker/<user>/silosffs/sffs` et lance `build-images.sh`
-  seulement si l'empreinte `HEAD:sffs` / `HEAD:silo` diffère de l'étiquette `sffs.tree` de l'image.
-  Elle crée db/redis/meili et le conteneur `sffs` (compagnons, label `ssdv2.app=silosffs`).
-- Refus si la base est migrée plus loin que l'image (étiquette `sffs.silo.migration` comparée à
-  `goose_db_version`).
-- Clé d'API Silo de sffs : créée par la posttask dès qu'un admin existe, dans
-  `silosffs-secrets/SFFS_SILO_KEY`, lue par sffs via `SFFS_SILO_KEY_FILE` (sans redémarrage).
-- Secrets en fichiers 0600 dans `<STORAGE>/docker/<user>/silosffs-secrets/` (format StreamFusion) ;
-  l'ancien `sffs-secrets/` est repris s'il existe.
-- Sur un SSDV2 sans ces fichiers (ex. `master`, comme ce serveur), les copier dans
-  `<SOURCE>/includes/dockerapps/` (non suivis, ajoutés à `.git/info/exclude`) puis lancer
-  `generique.sh launch_service silosffs` (pas besoin de `services-available` pour ça).
+- Définies dans le fork SSDV2 (`~/ssdv2-fork`, branche `feat/silo`) : `silo` = Silo officiel (mapping de
+  Plex : `~/Medias`, `~/local`, `/data`, `/mnt` rslave, en lecture seule) ; `sffs` = conteneur sffs + support
+  dans silo. Plus de scripts `ssd/` dans ce dépôt.
+- `sffs` patche un `silo` existant sur place (base gardée) ou l'installe s'il est absent (sous-domaine
+  demandé dans la pretask). La pretask écrit `<STORAGE>/vars/silo.yml` (marqueur `# sffs-patch`, image
+  `localhost/silo-sffs`, `SILO_SF_ROOT=/mnt/sffs`) ; la posttask lance `generique.sh launch_service silo`.
+  Suppression de sffs (`functions.sh`) : démonte `/mnt/sffs`, retire ce fichier.
+- Images : clone dans `<STORAGE>/docker/<user>/sffs/src` ; étiquette `sffs.tree` = `HEAD:sffs` / `HEAD:silo`.
+  Image locale à jour gardée, sinon `ghcr.io/haldir31/<image>:latest` si son étiquette correspond (publiée
+  par `.github/workflows/images.yml`), sinon `build-images.sh`.
+- Refus si la base de silo est migrée plus loin que l'image (`sffs.silo.migration` vs `goose_db_version`).
+  `.github/workflows/silo-upstream.yml` vérifie chaque semaine que les patchs s'appliquent sur Silo `main`.
+- Clé d'API Silo de sffs : créée par la posttask dès qu'un admin existe, dans `sffs-secrets/SFFS_SILO_KEY`,
+  lue via `SFFS_SILO_KEY_FILE` (sans redémarrage).
+- Sur un SSDV2 sans ces fichiers (ex. `master`, comme ce serveur), copier `vars|pretasks|posttasks/{silo,sffs}.yml`
+  dans `<SOURCE>/includes/dockerapps/` (non suivis, ajoutés à `.git/info/exclude`).
 
 ## Conventions
 

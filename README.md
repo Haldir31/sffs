@@ -17,7 +17,7 @@ StreamFusion ──base Postgres (lecture seule)──▶ sffs ──FUSE──�
 
 | Situation | Guide |
 |---|---|
-| Serveur installé avec **SSDV2** ([projetssd/ssdv2](https://github.com/projetssd/ssdv2)) et StreamFusion installé par SSDV2 | **[docs/INSTALL-SSD.md](docs/INSTALL-SSD.md)** : application `silosffs` du catalogue SSDV2, qui installe toute la pile (Silo modifié, sffs, base, Redis, Meilisearch) |
+| Serveur installé avec **SSDV2** ([projetssd/ssdv2](https://github.com/projetssd/ssdv2)) et StreamFusion installé par SSDV2 | **[docs/INSTALL-SSD.md](docs/INSTALL-SSD.md)** : application `sffs` du catalogue SSDV2 (patche le Silo existant, ou l'installe) |
 | Serveur **Docker** sans SSDV2 | [docs/INSTALL-DOCKER.md](docs/INSTALL-DOCKER.md) : `docker/compose.yml` |
 | Pas de Docker ni de root (**Podman rootless**, seedbox mutualisée) | [docs/INSTALL-PODMAN.md](docs/INSTALL-PODMAN.md) : scripts `deploy/bin/` |
 
