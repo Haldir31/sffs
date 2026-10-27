@@ -33,6 +33,9 @@ GRANT SELECT ON public.torrent_items TO sffs_reader;
 ```bash
 cp docker/.env.example docker/.env && chmod 600 docker/.env
 deploy/bin/sf-config.sh 'https://ton-streamfusion/xxxx/manifest.json'   # -> SF_STREAM_CFG, SF_PLAYBACK_CFG
+# ou, sans URL d'addon : génération automatique (clé d'API StreamFusion + clé AllDebrid)
+SF_URL=http://<ip-streamfusion>:8080 SF_PUBLIC=https://ton-streamfusion SF_API_KEY=<clé> AD_TOKEN=<clé> \
+  deploy/bin/sf-make-config.sh
 nano docker/.env
 ```
 

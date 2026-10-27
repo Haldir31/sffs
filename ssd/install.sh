@@ -6,7 +6,8 @@
 #   ssd/install.sh --files            copie seulement les définitions d'applications
 #
 # Options (toutes facultatives ; sans elles, les questions sont posées pendant l'installation) :
-#   --manifest <url>      URL du manifest de l'addon StreamFusion (…/manifest.json)
+#   --manifest <url>      URL d'addon StreamFusion existante (…/manifest.json) ; sans elle, la
+#                         configuration est générée (clé API StreamFusion dédiée + clé AllDebrid de decypharr)
 #   --subdomain <nom>     sous-domaine de Silo (défaut demandé ; l'API Jellyfin est sur <nom>-jf)
 #   --auth <type>         authentification Traefik de Silo : aucune conseillé (Silo a ses comptes)
 #   --only sffs|silo      n'installer qu'une des deux applications
@@ -88,8 +89,8 @@ export ANSIBLE_EXTRA_VARS_FILE=$EXTRA
 if [ "$ONLY" != silo ]; then
   echo "== Installation de sffs"
   ssd_launch sffs || fail "installation de sffs"
-  echo "   Chargement du catalogue (1 à 10 min, plus au premier démarrage)…"
-  for _ in $(seq 1 120); do [ -d /mnt/sffs/films ] && break; sleep 10; done
+  echo "   Chargement du catalogue (1 à 5 min ; 15 à 30 min au premier démarrage, le temps de remplir le cache TMDB)…"
+  for _ in $(seq 1 240); do [ -d /mnt/sffs/films ] && break; sleep 10; done
   [ -d /mnt/sffs/films ] || fail "/mnt/sffs non monté : docker logs sffs"
   ok "/mnt/sffs monté ($(ls /mnt/sffs/films | wc -l) films)"
 fi

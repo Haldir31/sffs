@@ -40,23 +40,33 @@ cd ~/sffs
 
 Le dépôt doit rester à cet endroit : SSDV2 y reconstruit les images lors des réinstallations.
 
-### 2. Préparer l'URL de l'addon StreamFusion
+### 2. Rien à préparer côté StreamFusion
 
-Dans StreamFusion, configure l'addon avec **AllDebrid** et la langue voulue, puis copie l'URL d'installation,
-celle qui se termine par `/manifest.json`. sffs en déduit les deux configurations dont il a besoin.
+sffs génère lui-même sa configuration StreamFusion, sans passer par la page `/configure` :
+- il crée une **clé d'API StreamFusion dédiée** (`sffs`, table `api_keys`) ;
+- il reprend la **clé AllDebrid** de decypharr s'il est installé, et la demande sinon ;
+- il reprend la **clé TMDB** de StreamFusion ;
+- il trouve l'**adresse publique** de StreamFusion dans ses labels Traefik ;
+- il fait chiffrer la configuration par StreamFusion (`POST /api/config/encode`), comme le fait l'interface.
+
+Pour utiliser plutôt une URL d'addon existante : `ssd/install.sh --manifest '<url>/manifest.json'`.
 
 ### 3. Lancer l'installation
 
 ```bash
-ssd/install.sh
+ssd/install.sh --subdomain silosffs --auth aucune
 ```
+
+Toutes les options : `--subdomain`, `--auth`, `--manifest`, `--only sffs|silo`, `--files`. Sans option,
+les questions sont posées pendant l'installation.
 
 Le script :
 1. **Vérifie** Docker, `/dev/fuse`, StreamFusion et la propagation de `/mnt`.
 2. **Dépose les définitions** d'applications dans SSDV2 : `vars/` dans `<SETTINGS_STORAGE>/vars/`, `pretasks/`
    et `posttasks/` dans les sources SSDV2.
-3. **Installe sffs.** Il demande l'URL du manifest et la clé TMDB, crée le rôle `sffs_reader`, construit l'image
-   (1 à 2 min) et démarre le conteneur. Il attend ensuite que `/mnt/sffs` soit monté, en 1 à 5 minutes.
+3. **Installe sffs.** Il génère la configuration StreamFusion (étape 2), crée le rôle `sffs_reader`, construit
+   l'image (1 à 2 min) et démarre le conteneur. Il attend ensuite que `/mnt/sffs` soit monté. Au premier démarrage,
+   sffs interroge TMDB pour toutes les séries, ce qui prend 10 à 20 minutes.
 4. **Installe silosffs.** Il demande le **sous-domaine** et l'**authentification** : choisis `aucune`, car Silo
    gère ses propres comptes et ses applications ne passent pas une authentification Traefik. Il construit ensuite
    l'image Silo (5 à 15 min la première fois), puis crée la base, Redis et le conteneur. Avec Cloudflare,

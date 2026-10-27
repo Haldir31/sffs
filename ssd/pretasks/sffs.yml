@@ -47,15 +47,8 @@
 
 # --- Configuration StreamFusion (URL du manifest de l'addon) ----------------------------
 
-- name: Demander l'URL du manifest StreamFusion
-  ansible.builtin.pause:
-    prompt: |
-      SSDV2_PROMPT {"id": "sffs.manifest_url", "label": "URL du manifest StreamFusion", "kind": "secret", "secret": true}
-      Colle l'URL d'installation de ton addon StreamFusion (configurée avec AllDebrid), celle qui finit par /manifest.json
-    echo: false
-  register: sffs_manifest_prompt
-  when: sffs_known.SF_STREAM_CFG is not defined and (sffs_manifest_url | default('')) == ''
-  no_log: true
+# Sans URL de manifest (sffs_manifest_url / --manifest), la configuration est générée :
+# clé d'API StreamFusion dédiée "sffs", clé AllDebrid reprise de decypharr (ou demandée).
 
 - name: Adresse locale de StreamFusion (réseau traefik_proxy)
   ansible.builtin.command: docker inspect -f '{% raw %}{{(index .NetworkSettings.Networks "traefik_proxy").IPAddress}}{% endraw %}' {{ sffs_sf_container }}
@@ -63,15 +56,88 @@
   changed_when: false
   when: sffs_known.SF_STREAM_CFG is not defined
 
-- name: Déduire SF_STREAM_CFG et SF_PLAYBACK_CFG
+- name: Adresse publique de StreamFusion (labels Traefik)
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      docker inspect -f '{% raw %}{{range $k, $v := .Config.Labels}}{{$k}}={{$v}}{{println}}{{end}}{% endraw %}' {{ sffs_sf_container }} \
+        | grep -E '^traefik\.http\.routers\.[^.]+\.rule=' | grep -v -i admin | grep -o 'Host(`[^`]*`)' | head -1 | sed 's/Host(`\(.*\)`)/https:\/\/\1/'
+    executable: /bin/bash
+  register: sffs_sf_public
+  changed_when: false
+  failed_when: false
+  when: sffs_known.SF_STREAM_CFG is not defined
+
+- name: Créer (ou retrouver) la clé d'API StreamFusion de sffs
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      P="docker exec stremio-postgres psql -U streamfusion -d streamfusion -qAtc"
+      $P "insert into api_keys(api_key,is_active,never_expire,total_queries,name,proxied_links)
+          select gen_random_uuid(),true,true,0,'sffs',false
+          where not exists (select 1 from api_keys where name='sffs')"
+      $P "select api_key from api_keys where name='sffs'"
+    executable: /bin/bash
+  register: sffs_sf_api_key
+  changed_when: false
+  when: sffs_known.SF_STREAM_CFG is not defined and (sffs_manifest_url | default('')) == ''
+  no_log: true
+
+- name: Clé AllDebrid de decypharr
+  ansible.builtin.shell:
+    cmd: |
+      python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); print(next(d["api_key"] for d in c.get("debrids",[]) if d.get("name")=="alldebrid" and d.get("api_key")))' \
+        "{{ settings.storage }}/docker/{{ lookup('env','USER') }}/decypharr/config/config.json"
+    executable: /bin/bash
+  register: sffs_ad_decypharr
+  changed_when: false
+  failed_when: false
+  when: sffs_known.SF_STREAM_CFG is not defined and (sffs_manifest_url | default('')) == '' and (sffs_alldebrid_key | default('')) == ''
+  no_log: true
+
+- name: Demander la clé AllDebrid
+  ansible.builtin.pause:
+    prompt: |
+      SSDV2_PROMPT {"id": "sffs.alldebrid_key", "label": "Clé API AllDebrid", "kind": "secret", "secret": true}
+      Entre ta clé API AllDebrid (https://alldebrid.com/apikeys)
+    echo: false
+  register: sffs_ad_prompt
+  when:
+    - sffs_known.SF_STREAM_CFG is not defined
+    - (sffs_manifest_url | default('')) == ''
+    - (sffs_alldebrid_key | default('')) == ''
+    - (sffs_ad_decypharr.stdout | default('')) == ''
+  no_log: true
+
+- name: Générer la configuration StreamFusion
+  ansible.builtin.command:
+    argv: ["{{ sffs_repo }}/deploy/bin/sf-make-config.sh"]
+  environment:
+    SF_URL: "http://{{ sffs_sf_ip.stdout }}:8080"
+    SF_PUBLIC: "{{ sffs_sf_public.stdout | default('', true) | trim or ('http://' ~ sffs_sf_ip.stdout ~ ':8080') }}"
+    SF_API_KEY: "{{ sffs_sf_api_key.stdout | trim }}"
+    AD_TOKEN: "{{ (sffs_alldebrid_key | default('', true)) or (sffs_ad_decypharr.stdout | default('', true)) or (sffs_ad_prompt.user_input | default('')) | trim }}"
+    SF_LANGS: "{{ sffs_sf_langs | default('fr,multi') }}"
+  register: sffs_cfg_gen
+  changed_when: false
+  when: sffs_known.SF_STREAM_CFG is not defined and (sffs_manifest_url | default('')) == ''
+  no_log: true
+
+- name: Déduire SF_STREAM_CFG et SF_PLAYBACK_CFG d'une URL de manifest fournie
   ansible.builtin.command:
     argv:
       - "{{ sffs_repo }}/deploy/bin/sf-config.sh"
-      - "{{ sffs_manifest_url | default(sffs_manifest_prompt.user_input | default(''), true) | trim }}"
+      - "{{ sffs_manifest_url | default('') | trim }}"
       - "tt0172495"
       - "http://{{ sffs_sf_ip.stdout }}:8080"
-  register: sffs_cfg_out
+  register: sffs_cfg_url
   changed_when: false
+  when: sffs_known.SF_STREAM_CFG is not defined and (sffs_manifest_url | default('')) != ''
+  no_log: true
+
+- name: Sortie du générateur
+  ansible.builtin.set_fact:
+    sffs_cfg_out: "{{ sffs_cfg_url if (sffs_manifest_url | default('')) != '' else sffs_cfg_gen }}"
   when: sffs_known.SF_STREAM_CFG is not defined
   no_log: true
 
