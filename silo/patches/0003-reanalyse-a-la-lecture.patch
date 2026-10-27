@@ -1,9 +1,9 @@
-From 421bd439aff417b4e9be3bfba887a752fb75e46e Mon Sep 17 00:00:00 2001
+From 3547afb789245c8d5d68f991fe0c5d43e4462418 Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 13:58:19 +0000
-Subject: [PATCH 3/6] =?UTF-8?q?POC:=20r=C3=A9parer=20le=20probe=20d'une=20?=
- =?UTF-8?q?version=20StreamFusion=20seulement=20quand=20elle=20est=20arm?=
- =?UTF-8?q?=C3=A9e?=
+Subject: [PATCH 3/6] =?UTF-8?q?sffs=20:=20r=C3=A9analyser=20un=20fichier?=
+ =?UTF-8?q?=20virtuel=20seulement=20quand=20il=20est=20arm=C3=A9=20(lectur?=
+ =?UTF-8?q?e)?=
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit

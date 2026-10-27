@@ -101,7 +101,7 @@ Le service de lecture est fixé sur AllDebrid (`"service":"AD"` dans `playbackUR
 | 0003 | Réparation de l'analyse seulement pour un fichier armé, donc au moment d'une lecture |
 | 0004 | Compatibilité Jellyfin : la version demandée dans PlaybackInfo est armée (Apple TV, Infuse…) |
 | 0005 | Une version hors cache bascule sur une autre version du même titre |
-| 0006 | Analyse de la source réellement servie (`user.sf.served`) quand sffs a substitué une version |
+| 0006 | Analyse de la source réellement servie (`user.sf.served`) quand sffs a substitué une version ; après un échec, pas de nouvel essai pendant une heure |
 
 Les patchs ne changent rien hors de `SILO_SF_ROOT` : les autres bibliothèques se comportent comme dans Silo officiel.
 

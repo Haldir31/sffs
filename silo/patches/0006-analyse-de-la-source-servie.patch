@@ -1,8 +1,8 @@
-From 2c2ade4fa3a01629352e4c7f3c8762cab4ad7962 Mon Sep 17 00:00:00 2001
+From 955a095efc1312cee8a3dcef1c84d5c1d21a8fd2 Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 20:23:18 +0000
-Subject: [PATCH 6/6] =?UTF-8?q?POC:=20probe=20de=20la=20source=20r=C3=A9el?=
- =?UTF-8?q?lement=20servie=20par=20sffs=20(rempla=C3=A7ante=20comprise)?=
+Subject: [PATCH 6/6] =?UTF-8?q?sffs=20:=20analyser=20la=20source=20r=C3=A9?=
+ =?UTF-8?q?ellement=20servie=20(rempla=C3=A7ante=20comprise)?=
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -10,6 +10,8 @@ Content-Transfer-Encoding: 8bit
 sffs peut remplacer une version hors cache par une autre (autre codec, autres pistes, autre
 taille). Au lancement d'une lecture, si probe_source ne vaut pas sf:<hash servi>, ffprobe
 analyse la source servie et la ligne media_files est réécrite (pistes, codecs, taille réelle).
+Après un échec de ffprobe sur une source, pas de nouvel essai pendant une heure : un
+lecteur redemande la lecture en boucle, et chaque essai lit le début du fichier chez le débrideur.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01AbUx511UGbcCoLk6U5BQjP

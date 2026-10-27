@@ -1,8 +1,12 @@
-From cd033cb2ed35d756215843814d9adb4aba1d51ab Mon Sep 17 00:00:00 2001
+From c473c3b25db85d9de3059c280f7dcb666838c0ff Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 12:40:33 +0000
-Subject: [PATCH 1/6] POC: versions virtuelles StreamFusion servies par sffs
- (FUSE)
+Subject: [PATCH 1/6] =?UTF-8?q?sffs=20:=20reconna=C3=AEtre=20les=20fichier?=
+ =?UTF-8?q?s=20virtuels=20StreamFusion=20et=20les=20armer=20avant=20lectur?=
+ =?UTF-8?q?e?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
 
 Les fichiers sous SILO_SF_ROOT viennent de sffs : leurs caracteristiques
 sont lues dans l'attribut user.sf.probe au lieu de ffprobe, le hash du

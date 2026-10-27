@@ -1,8 +1,8 @@
-From da767c6dd967f3704c4335ec73fb826bb050beef Mon Sep 17 00:00:00 2001
+From 7343c46a98fcfea905c0bb78a4afd386b227e459 Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 14:31:24 +0000
-Subject: [PATCH 5/6] POC: une version StreamFusion hors cache bascule sur une
- autre version
+Subject: [PATCH 5/6] sffs : une version hors cache bascule sur une autre
+ version du titre
 
 A la lecture, Silo demande a sffs si la version est prete chez le
 debrideur (user.sf.cached). Sinon elle est lue comme illisible pour
