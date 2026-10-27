@@ -40,7 +40,7 @@ add_dummy_ip() {
 run_app() {
   local mnt; mnt=$(sffs_mount)
   podman run -d --pod "$POD" --name "$APP" --env-file "$CONF/silo.env" \
-    -e SILO_POC_REMOTE=1 -e SILO_SF_ROOT=/mnt/sf --stop-timeout=120 \
+    -e SILO_SF_ROOT=/mnt/sf --stop-timeout=120 \
     -v "$mnt":/mnt/sf:ro \
     -v "$STACK/data/plugins":/var/lib/silo/plugins -v "$STACK/data/artwork":/var/lib/silo/artwork \
     -v "$STACK/data/compat":/var/lib/silo/compat -v "$STACK/data/transcode":/tmp/silo-transcode \

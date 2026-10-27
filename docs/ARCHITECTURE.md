@@ -87,12 +87,13 @@ Le service de lecture est fixé sur AllDebrid (`"service":"AD"` dans `playbackUR
 
 | Patch | Rôle |
 |---|---|
-| 0001 | Direct play d'un flux HTTP distant via un fichier `.remote` à côté de la vidéo (premier POC, activé par `SILO_POC_REMOTE=1`) |
-| 0002 | Reconnaissance des fichiers sffs (`internal/sfvirtual`) : caractéristiques lues dans `user.sf.probe`, armement avant lecture |
-| 0003 | Pas de réparation d'analyse ni de scan « copy-safety » sur les fichiers sffs (ils seraient téléchargés) |
-| 0004 | Réparation de l'analyse seulement pour un fichier armé, donc au moment d'une lecture |
-| 0005 | Compatibilité Jellyfin : la version demandée dans PlaybackInfo est armée (Apple TV, Infuse…) |
-| 0006 | Une version hors cache bascule sur une autre version du même titre |
-| 0007 | Analyse de la source réellement servie (`user.sf.served`) quand sffs a substitué une version |
+| 0001 | Reconnaissance des fichiers sffs (`internal/sfvirtual`) : caractéristiques lues dans `user.sf.probe`, armement avant lecture |
+| 0002 | Pas de réparation d'analyse ni de scan « copy-safety » sur les fichiers sffs (ils seraient téléchargés) |
+| 0003 | Réparation de l'analyse seulement pour un fichier armé, donc au moment d'une lecture |
+| 0004 | Compatibilité Jellyfin : la version demandée dans PlaybackInfo est armée (Apple TV, Infuse…) |
+| 0005 | Une version hors cache bascule sur une autre version du même titre |
+| 0006 | Analyse de la source réellement servie (`user.sf.served`) quand sffs a substitué une version |
+
+Les patchs ne changent rien hors de `SILO_SF_ROOT` : les autres bibliothèques se comportent comme dans Silo officiel.
 
 Silo trouve les fichiers sffs sous `SILO_SF_ROOT` (`/mnt/sf` dans le conteneur).

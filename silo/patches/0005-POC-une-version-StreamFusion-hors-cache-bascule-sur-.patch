@@ -1,7 +1,7 @@
-From 6b230fcf7ff616768c3e70c909a61ce7ddad7bc0 Mon Sep 17 00:00:00 2001
+From a8289965d41d98d1c81ab484bff8c4572a547958 Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 14:31:24 +0000
-Subject: [PATCH 6/7] POC: une version StreamFusion hors cache bascule sur une
+Subject: [PATCH 5/6] POC: une version StreamFusion hors cache bascule sur une
  autre version
 
 A la lecture, Silo demande a sffs si la version est prete chez le
@@ -105,6 +105,3 @@ index 8abe1045e..4102e1b38 100644
  // Arm autorise la lecture de path pendant quelques heures. Sans effet sur un fichier ordinaire.
  func Arm(path string) {
  	if !Under(path) {
--- 
-2.55.0
-

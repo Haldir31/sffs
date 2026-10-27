@@ -1,7 +1,7 @@
-From da5a2a688664028b252f256b662553f000d28737 Mon Sep 17 00:00:00 2001
+From 2ce77ad0e2e9684e8936e2b5751f5e7e88799cb6 Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 13:59:25 +0000
-Subject: [PATCH 5/7] =?UTF-8?q?POC:=20jellycompat=20arme=20la=20version=20?=
+Subject: [PATCH 4/6] =?UTF-8?q?POC:=20jellycompat=20arme=20la=20version=20?=
  =?UTF-8?q?StreamFusion=20demand=C3=A9e=20dans=20PlaybackInfo?=
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
@@ -54,6 +54,3 @@ index 268262dc1..2718dca6b 100644
 +	}
 +	sfvirtual.Arm(file.FilePath)
 +}
--- 
-2.55.0
-

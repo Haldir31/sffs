@@ -32,7 +32,6 @@ pg_env:
   REDIS_URL: "redis://redis-{{ pgrole }}:6379"
   SILO_PLUGIN_CACHE_DIR: '/var/lib/silo/plugins'
   SILO_SF_ROOT: '/mnt/sf'
-  SILO_POC_REMOTE: '1'
   SILO_SHUTDOWN_DELAY: '0'
   GOMAXPROCS: "{{ silo_gomaxprocs }}"
   TZ: 'Europe/Paris'

@@ -1,7 +1,7 @@
-From c5dba4253c6ce27a4928ca7287d550e8b79687d9 Mon Sep 17 00:00:00 2001
+From 8190a821dd5a42945a73229e5416b6d8d7c8dbac Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 13:58:19 +0000
-Subject: [PATCH 4/7] =?UTF-8?q?POC:=20r=C3=A9parer=20le=20probe=20d'une=20?=
+Subject: [PATCH 3/6] =?UTF-8?q?POC:=20r=C3=A9parer=20le=20probe=20d'une=20?=
  =?UTF-8?q?version=20StreamFusion=20seulement=20quand=20elle=20est=20arm?=
  =?UTF-8?q?=C3=A9e?=
 MIME-Version: 1.0
@@ -64,6 +64,3 @@ index 4722ac67b..8abe1045e 100644
  // Arm autorise la lecture de path pendant quelques heures. Sans effet sur un fichier ordinaire.
  func Arm(path string) {
  	if !Under(path) {
--- 
-2.55.0
-

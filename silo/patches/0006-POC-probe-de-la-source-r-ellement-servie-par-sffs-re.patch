@@ -1,7 +1,7 @@
-From 4f665766f99b85efaefc67619e5838c30ba03d65 Mon Sep 17 00:00:00 2001
+From 29364f762c2bea985419fc9ae1af0f109b3f67cf Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 20:23:18 +0000
-Subject: [PATCH 7/7] =?UTF-8?q?POC:=20probe=20de=20la=20source=20r=C3=A9el?=
+Subject: [PATCH 6/6] =?UTF-8?q?POC:=20probe=20de=20la=20source=20r=C3=A9el?=
  =?UTF-8?q?lement=20servie=20par=20sffs=20(rempla=C3=A7ante=20comprise)?=
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
@@ -166,6 +166,3 @@ index 4102e1b38..e844dd7ae 100644
 +	}
 +	return ""
 +}
--- 
-2.55.0
-
