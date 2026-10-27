@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,15 +22,16 @@ import (
 )
 
 type watchConfig struct {
-	every      time.Duration // SFFS_WATCH (défaut 1m, 0 = pas de surveillance)
-	siloURL    string        // SFFS_SILO_URL, ex. http://127.0.0.1:27461
-	siloKey    string        // SFFS_SILO_KEY : clé d'API admin de Silo
-	siloFilms  string        // SFFS_SILO_FILMS : chemin du dossier films vu par Silo (défaut /mnt/sf/films)
-	siloSeries string        // SFFS_SILO_SERIES (défaut /mnt/sf/series)
+	every       time.Duration // SFFS_WATCH (défaut 1m, 0 = pas de surveillance)
+	siloURL     string        // SFFS_SILO_URL, ex. http://127.0.0.1:27461
+	siloKey     string        // SFFS_SILO_KEY : clé d'API admin de Silo
+	siloKeyFile string        // SFFS_SILO_KEY_FILE : fichier de la clé, relu à chaque passage (clé créée après le démarrage)
+	siloFilms   string        // SFFS_SILO_FILMS : chemin du dossier films vu par Silo (défaut /mnt/sf/films)
+	siloSeries  string        // SFFS_SILO_SERIES (défaut /mnt/sf/series)
 }
 
 func loadWatchConfig() watchConfig {
-	w := watchConfig{every: time.Minute, siloURL: os.Getenv("SFFS_SILO_URL"), siloKey: os.Getenv("SFFS_SILO_KEY"),
+	w := watchConfig{every: time.Minute, siloURL: os.Getenv("SFFS_SILO_URL"), siloKey: os.Getenv("SFFS_SILO_KEY"), siloKeyFile: os.Getenv("SFFS_SILO_KEY_FILE"),
 		siloFilms: "/mnt/sf/films", siloSeries: "/mnt/sf/series"}
 	if v := os.Getenv("SFFS_WATCH"); v != "" {
 		d, err := time.ParseDuration(v)
@@ -203,7 +205,19 @@ func newSiloNotifier(wc watchConfig) *siloNotifier {
 	return &siloNotifier{wc: wc, http: &http.Client{Timeout: 30 * time.Second}, pending: map[string]bool{}}
 }
 
-func (s *siloNotifier) enabled() bool { return s != nil && s.wc.siloURL != "" && s.wc.siloKey != "" }
+func (s *siloNotifier) enabled() bool { return s != nil && s.wc.siloURL != "" && s.key() != "" }
+
+// key renvoie la clé d'API Silo : SFFS_SILO_KEY, sinon le contenu de SFFS_SILO_KEY_FILE.
+func (s *siloNotifier) key() string {
+	if s.wc.siloKey != "" || s.wc.siloKeyFile == "" {
+		return s.wc.siloKey
+	}
+	b, err := os.ReadFile(s.wc.siloKeyFile)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
 
 func (s *siloNotifier) add(dirs []string) {
 	if !s.enabled() {
@@ -309,7 +323,7 @@ func (s *siloNotifier) scan(ctx context.Context, p string) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+s.wc.siloKey)
+	req.Header.Set("Authorization", "Bearer "+s.key())
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := s.http.Do(req)
 	if err != nil {

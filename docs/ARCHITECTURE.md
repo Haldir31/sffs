@@ -67,7 +67,8 @@
 | `SFFS_WATCH` | Intervalle de détection des nouveautés (`0` = désactivé) | `1m` |
 | `SFFS_RELOAD` | Rechargement complet (`0` = jamais) | `24h` |
 | `SFFS_SILO_URL`, `SFFS_SILO_KEY` | API Silo pour les scans ciblés (vide = désactivé) | |
-| `SFFS_SILO_FILMS`, `SFFS_SILO_SERIES` | Chemins des dossiers vus par Silo | `/mnt/sf/films`, `/mnt/sf/series` |
+| `SFFS_SILO_KEY_FILE` | Fichier de la clé Silo, relu à chaque passage (si `SFFS_SILO_KEY` est vide) : la clé peut être créée après le démarrage | |
+| `SFFS_SILO_FILMS`, `SFFS_SILO_SERIES` | Chemins des dossiers vus par Silo | `/mnt/sf/films`, `/mnt/sf/series` (SSDV2 : `/mnt/sffs/films`, `/mnt/sffs/series`) |
 | `SFFS_DRY_RUN`, `SFFS_DRY_LIST` | Charger sans monter, et lister les versions retenues | |
 
 Le service de lecture est fixé sur AllDebrid (`"service":"AD"` dans `playbackURL`, `sffs/main.go`).
@@ -96,4 +97,4 @@ Le service de lecture est fixé sur AllDebrid (`"service":"AD"` dans `playbackUR
 
 Les patchs ne changent rien hors de `SILO_SF_ROOT` : les autres bibliothèques se comportent comme dans Silo officiel.
 
-Silo trouve les fichiers sffs sous `SILO_SF_ROOT` (`/mnt/sf` dans le conteneur).
+Silo trouve les fichiers sffs sous `SILO_SF_ROOT` : `/mnt/sffs` avec SSDV2 (mêmes chemins que l'hôte), `/mnt/sf` avec Compose et Podman.

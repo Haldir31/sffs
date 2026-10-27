@@ -25,9 +25,13 @@ SILO_BASE=${SILO_BASE:-$(cat "$REPO/silo/BASE_COMMIT")}
 # Docker : BuildKit nécessaire (RUN --mount, RUN --network du Dockerfile de Silo).
 [ "$ENGINE" = docker ] && export DOCKER_BUILDKIT=1
 
+# Empreinte git du dossier source (vide hors dépôt git) : SSDV2 ne reconstruit une image que si
+# elle a changé.
+tree() { git -C "$REPO" rev-parse "HEAD:$1" 2>/dev/null || true; }
+
 build_sffs() {
   echo "== sffs -> $SFFS_IMAGE ($ENGINE)"
-  "$ENGINE" build -t "$SFFS_IMAGE" "$REPO/sffs"
+  "$ENGINE" build --label sffs.tree="$(tree sffs)" -t "$SFFS_IMAGE" "$REPO/sffs"
 }
 
 build_silo() {
@@ -48,7 +52,10 @@ build_silo() {
   fi
   # Fichier d'exclusion du contexte de build propre à cette image (remis à zéro au prochain checkout -f).
   cp "$REPO/silo/dockerignore.sffs" .dockerignore
+  # Dernière migration de base connue : l'installation SSDV2 refuse une base déjà migrée plus loin.
+  mig=$(ls migrations/sql | sed -n 's/^\([0-9]\{14\}\)_.*\.sql$/\1/p' | sort | tail -1)
   "$ENGINE" build -f "$REPO/silo/Dockerfile.sffs" \
+    --label sffs.silo.base="$SILO_BASE" --label sffs.silo.migration="$mig" --label sffs.tree="$(tree silo)" \
     --build-arg BUILD_REVISION="$(git rev-parse --short HEAD)" \
     --build-arg BUILD_DATE="$(date -u +%FT%TZ)" \
     -t "$SILO_IMAGE" .

@@ -5,7 +5,7 @@
 disque. La vidéo n'est lue chez **AllDebrid** qu'au moment où quelqu'un lance une lecture.
 
 ```
-StreamFusion ──base Postgres (lecture seule)──▶ sffs ──FUSE──▶ /mnt/sffs/sf/{films,series}
+StreamFusion ──base Postgres (lecture seule)──▶ sffs ──FUSE──▶ /mnt/sffs/{films,series}
      ▲                                            │                      │ (lecture seule)
      └──── /playback (lien AllDebrid) ◀───────────┘ à la lecture         ▼
                                                      Silo modifié (+ PostgreSQL pgvector + Redis)
@@ -17,7 +17,7 @@ StreamFusion ──base Postgres (lecture seule)──▶ sffs ──FUSE──�
 
 | Situation | Guide |
 |---|---|
-| Serveur installé avec **SSDV2** ([projetssd/ssdv2](https://github.com/projetssd/ssdv2)) et StreamFusion installé par SSDV2 | **[docs/INSTALL-SSD.md](docs/INSTALL-SSD.md)** : `ssd/install.sh` installe sffs et Silo comme des applications SSDV2 (Traefik, Cloudflare, registre, suppression) |
+| Serveur installé avec **SSDV2** ([projetssd/ssdv2](https://github.com/projetssd/ssdv2)) et StreamFusion installé par SSDV2 | **[docs/INSTALL-SSD.md](docs/INSTALL-SSD.md)** : application `silosffs` du catalogue SSDV2, qui installe toute la pile (Silo modifié, sffs, base, Redis, Meilisearch) |
 | Serveur **Docker** sans SSDV2 | [docs/INSTALL-DOCKER.md](docs/INSTALL-DOCKER.md) : `docker/compose.yml` |
 | Pas de Docker ni de root (**Podman rootless**, seedbox mutualisée) | [docs/INSTALL-PODMAN.md](docs/INSTALL-PODMAN.md) : scripts `deploy/bin/` |
 
@@ -36,9 +36,8 @@ Côté ressources :
 | Chemin | Contenu |
 |---|---|
 | `sffs/` | Code Go de sffs et son `Dockerfile` |
-| `silo/` | 7 patchs à appliquer sur Silo officiel au commit `silo/BASE_COMMIT`, et le `Dockerfile` de l'image modifiée |
+| `silo/` | 6 patchs à appliquer sur Silo officiel au commit `silo/BASE_COMMIT`, et le `Dockerfile` de l'image modifiée |
 | `build-images.sh` | Construit les images `localhost/sffs` et `localhost/silo-sffs` (Docker ou Podman) |
-| `ssd/` | Intégration SSDV2 : définitions d'applications (`vars`, `pretasks`, `posttasks`) et scripts d'installation, de mise à jour et de désinstallation |
 | `docker/` | `compose.yml` pour Docker sans SSDV2 |
 | `deploy/` | Scripts et modèles de configuration pour Podman rootless |
 | `docs/` | Guides d'installation, [fonctionnement](docs/ARCHITECTURE.md), [exploitation et dépannage](docs/EXPLOITATION.md) |

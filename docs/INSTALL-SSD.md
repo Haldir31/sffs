@@ -1,134 +1,117 @@
 # Installation dans SSDV2
 
-sffs et Silo s'installent comme deux applications SSDV2, par le même mécanisme que les autres
-(`launch_service` → pretasks → conteneur → posttasks → registre) :
+sffs s'installe avec l'application **`silosffs`** du catalogue SSDV2, comme n'importe quelle autre application
+(menu SSDV2, interface web ou `ssdv2ctl`). Elle installe toute la pile :
 
-| Application | Conteneurs | Rôle |
-|---|---|---|
-| `sffs` | `sffs` | Système de fichiers virtuel. Monte `/mnt/sffs/sf` sur l'hôte, comme decypharr monte `/mnt/decypharr`. Pas de route Traefik. |
-| `silosffs` | `silosffs`, `db-silosffs` (PostgreSQL 18 + pgvector), `redis-silosffs` | Silo modifié, avec deux routes Traefik : `https://<sous-domaine>.<domaine>` (web) et `https://<sous-domaine>-jf.<domaine>` (applications Jellyfin) |
+| Conteneur | Rôle |
+|---|---|
+| `silosffs` | Silo modifié (Silo officiel + patchs de `silo/patches`). Deux routes Traefik : `https://<sous-domaine>.<domaine>` (web) et `https://<sous-domaine>-jf.<domaine>` (applications Jellyfin) |
+| `sffs` | Système de fichiers virtuel. Monte `/mnt/sffs` sur l'hôte (`/mnt/sffs/films`, `/mnt/sffs/series`), comme decypharr monte `/mnt/decypharr`. Pas de route Traefik |
+| `db-silosffs`, `redis-silosffs`, `meili-silosffs` | Base PostgreSQL 18 + pgvector, Redis, Meilisearch |
 
-Ce que fait l'installation :
-- **Base StreamFusion :** sffs lit directement le conteneur `stremio-postgres` de SSDV2, avec un **rôle dédié
-  en lecture seule** (`sffs_reader`, droit `SELECT` sur `torrent_items` uniquement), créé automatiquement.
-- **Lecture :** les liens de lecture passent par `stream-fusion:8080` sur le réseau `traefik_proxy`.
-- **Secrets :** ils sont générés ou demandés une seule fois (invites `SSDV2_PROMPT`, valeurs masquées), puis gardés dans
-  `<SETTINGS_STORAGE>/docker/<user>/sffs-secrets/` et `silosffs-secrets/` (droits 0600).
-- **Mises à jour de SSDV2 :** aucun fichier suivi par git n'est modifié dans SSDV2, donc `git pull` reste possible.
-- **Correctifs SSDV2 en attente :** comme l'interface web et `ssdv2ctl`, l'installation passe par
-  `generique.sh`, qui applique d'abord les correctifs SSDV2 en attente (`patches/`). Ils peuvent modifier des
-  fichiers de SSDV2, comme le catalogue ou les menus.
-- **Testé** sur un serveur SSDV2 ARM (aarch64, 4 cœurs) : la construction de l'image Silo y prend moins de 10 minutes.
+Tous portent le label `ssdv2.app=silosffs` : la suppression de l'application les retire tous.
+
+Le catalogue propose aussi **`silo`**, un Silo officiel classique. Les deux peuvent cohabiter. Ils ont le même
+mapping de dossiers que Plex, en lecture seule : `~/Medias`, `~/local`, `/data` et `/mnt` (rslave). Un même
+`silosffs` peut donc servir aussi tes bibliothèques habituelles ; hors de `/mnt/sffs`, il se comporte comme
+Silo officiel.
+
+En attendant son intégration à SSDV2, l'application est dans la branche `feat/silo` du fork
+[Haldir31/ssdv2](https://github.com/Haldir31/ssdv2).
+
+## Ce que fait l'installation
+
+La pretask de `silosffs` :
+1. **Vérifie** que StreamFusion est installé par SSDV2 (registre `ssddb`) et démarré, que `/dev/fuse` existe et
+   que `/mnt` est en propagation partagée. Rien n'est créé si un contrôle échoue.
+2. **Clone ce dépôt** dans `<SETTINGS_STORAGE>/docker/<user>/silosffs/sffs` (réglages `silosffs_repo` et
+   `silosffs_repo_version`), puis **construit les images** `localhost/silo-sffs` (5 à 15 min la première fois) et
+   `localhost/sffs` (1 à 2 min). Chaque image porte l'empreinte git de ses sources : à chaque relance de
+   l'application, les sources sont mises à jour et seule une image dont les sources ont changé est reconstruite.
+3. **Crée les compagnons** (base, Redis, Meilisearch) et refuse de continuer si la base a déjà été migrée par un
+   Silo plus récent que l'image modifiée.
+4. **Configure sffs**, sans passer par la page `/configure` de StreamFusion :
+   - une **clé d'API StreamFusion dédiée** (`sffs`, table `api_keys`) ;
+   - la **clé AllDebrid** de decypharr s'il est installé, demandée sinon ;
+   - la **clé TMDB** de StreamFusion, demandée si elle manque ;
+   - la configuration chiffrée par StreamFusion (`POST /api/config/encode`), comme le fait l'interface ;
+   - le **proxy de StreamFusion** (`PROXY_URL`, en général `socks5://warp:1080`), sans lequel AllDebrid refuse
+     les téléchargements depuis un serveur ;
+   - un **rôle Postgres en lecture seule** dans `stremio-postgres` (`sffs_reader`, `SELECT` sur `torrent_items`).
+5. **Démarre sffs** sur `/mnt/sffs`.
+
+Les secrets sont générés ou demandés une seule fois (invites `SSDV2_PROMPT`, valeurs masquées), puis gardés dans
+`<SETTINGS_STORAGE>/docker/<user>/silosffs-secrets/` (droits 0600).
+
+La posttask crée les DNS (Cloudflare) du sous-domaine `-jf`, attend que Silo réponde, puis crée la **clé d'API Silo
+de sffs** dès qu'un compte admin existe. sffs relit cette clé sans redémarrer et demande alors à Silo un scan
+ciblé de chaque dossier modifié dans StreamFusion.
+
+Testé sur un serveur SSDV2 ARM (aarch64, 4 cœurs).
 
 ## Prérequis
 
-- SSDV2 installé, avec **StreamFusion installé par SSDV2** : conteneurs `stream-fusion` (ou `streamfusion`) et
-  `stremio-postgres` démarrés, et StreamFusion **fonctionnel** : l'addon Stremio doit déjà afficher des sources
-  en cache. Sur un serveur (datacenter), AllDebrid n'accepte StreamFusion que via le proxy `warp` de SSDV2 ;
-  vérifie qu'il est connecté (voir Dépannage).
-- Un compte **AllDebrid** (clé API) et une clé **TMDB** (déjà renseignée dans StreamFusion).
-- Aucun Silo préalable n'est nécessaire : l'installation fournit le sien (`silosffs`), indépendant d'un
-  éventuel Silo officiel déjà installé par SSDV2.
+- SSDV2, avec **StreamFusion installé par SSDV2** et **fonctionnel** : l'addon Stremio doit déjà afficher des
+  sources en cache. Sur un serveur (datacenter), AllDebrid n'accepte StreamFusion que via le proxy `warp` de
+  SSDV2 ; vérifie qu'il est connecté (voir Dépannage).
+- Un compte **AllDebrid** et une clé **TMDB** (déjà renseignée dans StreamFusion).
 - `/dev/fuse` présent, et `/mnt` en propagation partagée (`findmnt -o PROPAGATION /mnt` affiche `shared`).
   C'est le cas par défaut, et c'est déjà nécessaire pour decypharr ou zurg.
 - `git`, `curl`, `openssl` (déjà présents avec SSDV2).
 
-## Pas à pas
+## Installation
 
-### 1. Récupérer le dépôt
-
-Avec l'utilisateur SSDV2 (pas root) :
-
-```bash
-git clone https://github.com/Haldir31/sffs.git ~/sffs
-cd ~/sffs
-```
-
-Le dépôt est privé : il faut avoir été invité comme collaborateur. `git clone` demande alors l'identifiant
-GitHub et, comme mot de passe, un jeton d'accès personnel (GitHub → Settings → Developer settings →
-Personal access tokens, droit lecture sur le dépôt). Avec la CLI GitHub : `gh auth login` puis
-`gh repo clone Haldir31/sffs ~/sffs`.
-
-Le dépôt doit rester à cet endroit : SSDV2 y reconstruit les images lors des réinstallations.
-
-### 2. Rien à préparer côté StreamFusion
-
-sffs génère lui-même sa configuration StreamFusion, sans passer par la page `/configure` :
-- il crée une **clé d'API StreamFusion dédiée** (`sffs`, table `api_keys`) ;
-- il reprend la **clé AllDebrid** de decypharr s'il est installé, et la demande sinon ;
-- il reprend la **clé TMDB** de StreamFusion ;
-- il trouve l'**adresse publique** de StreamFusion dans ses labels Traefik ;
-- il fait chiffrer la configuration par StreamFusion (`POST /api/config/encode`), comme le fait l'interface.
-
-Pour utiliser plutôt une URL d'addon existante : `ssd/install.sh --manifest '<url>/manifest.json'`.
-
-### 3. Lancer l'installation
-
-```bash
-ssd/install.sh --subdomain silosffs --auth aucune
-```
-
-Toutes les options : `--subdomain`, `--auth`, `--manifest`, `--only sffs|silo`, `--files`. Sans option,
-les questions sont posées pendant l'installation.
-
-Le script :
-1. **Vérifie** Docker, `/dev/fuse` et la propagation de `/mnt`. Il **refuse de démarrer** si StreamFusion
-   n'est pas installé par SSDV2 (registre `ssddb`) et démarré. sffs seul (`--only sffs`) exige en plus que
-   silosffs soit installé et démarré : c'est le seul lecteur capable d'ouvrir ses fichiers. Les mêmes
-   contrôles sont faits par les pretasks, avant toute création, si l'installation est lancée autrement.
-2. **Dépose les définitions** d'applications dans SSDV2 : `vars/` dans `<SETTINGS_STORAGE>/vars/`, `pretasks/`
-   et `posttasks/` dans les sources SSDV2.
-3. **Installe sffs.** Il génère la configuration StreamFusion (étape 2), crée le rôle `sffs_reader`, construit
-   l'image (1 à 2 min) et démarre le conteneur. Il attend ensuite que `/mnt/sffs/sf` soit monté. Au premier démarrage,
-   sffs interroge TMDB pour toutes les séries, ce qui prend 10 à 20 minutes.
-4. **Installe silosffs.** Il demande le **sous-domaine** et l'**authentification** : choisis `aucune`, car Silo
-   gère ses propres comptes et ses applications ne passent pas une authentification Traefik. Il construit ensuite
-   l'image Silo (5 à 15 min la première fois), puis crée la base, Redis et le conteneur. Avec Cloudflare,
-   les DNS du sous-domaine et du sous-domaine `-jf` sont créés automatiquement.
-
-### 4. Premier réglage de Silo
-
-1. Ouvre `https://<sous-domaine>.<domaine>` et **crée le compte admin**.
-2. Ajoute deux bibliothèques :
-   - **Films**, type films, dossier `/mnt/sf/films`
-   - **Séries**, type séries, dossier `/mnt/sf/series`
+1. Installe l'application **silosffs** depuis SSDV2. Pour le sous-domaine, choisis par exemple `silosffs` ;
+   pour l'authentification, choisis **aucune** : Silo gère ses propres comptes, et ses applications ne savent
+   pas passer une authentification Traefik.
+2. Ouvre `https://<sous-domaine>.<domaine>` et **crée le compte admin**.
+3. Ajoute deux bibliothèques :
+   - **Films**, type films, dossier `/mnt/sffs/films`
+   - **Séries**, type séries, dossier `/mnt/sffs/series`
 
    Le premier scan dure plusieurs heures pour tout le catalogue. Rien n'est téléchargé pendant le scan.
-3. Active les scans ciblés des nouveautés StreamFusion :
-   ```bash
-   ssd/silo-key.sh
-   ```
-   Le script crée une clé d'API Silo pour sffs et l'enregistre dans les secrets. Il redéploie ensuite sffs,
-   mais seulement **après la fin des scans Silo en cours** (le redéploiement démonte `/mnt/sffs/sf` une minute).
-   Pendant le premier scan, lance-le donc en arrière-plan :
-   `setsid nohup ssd/silo-key.sh > ~/sffs-silo-key.log 2>&1 &`
+4. Une fois le premier scan terminé, **relance l'application silosffs** (données conservées) : la posttask crée la
+   clé d'API Silo de sffs, et les nouveautés StreamFusion apparaissent ensuite dans Silo en quelques minutes.
 
-### 5. Clients
-
+Clients :
 - **Navigateur :** `https://<sous-domaine>.<domaine>`
 - **Applications Jellyfin** (Apple TV, Infuse, Swiftfin…) : serveur `https://<sous-domaine>-jf.<domaine>`
 
 ## Au quotidien
 
-| Action | Commande |
+| Action | Comment |
 |---|---|
-| Mettre à jour sffs et/ou Silo après `git pull` | `ssd/update.sh [sffs\|silo\|all]` |
-| Redémarrer | `docker restart sffs` (Silo voit le nouveau montage sans redémarrer) |
+| Mettre à jour sffs et Silo modifié | relancer l'application silosffs (sources mises à jour, images reconstruites si besoin) |
+| Forcer la reconstruction des images | variable `silosffs_rebuild: true` (par exemple dans `<SETTINGS_STORAGE>/vars/silosffs.yml`) |
+| Redémarrer sffs | `docker restart sffs` (Silo voit le nouveau montage sans redémarrer) |
 | Journaux | `docker logs -f sffs` · `docker logs -f silosffs` |
-| Changer un réglage de sffs (langues, quotas…) | modifier `<SETTINGS_STORAGE>/vars/sffs.yml` (`sffs_langs`, `sffs_per_quality`…), puis `ssd/update.sh sffs` |
-| Désinstaller | `ssd/uninstall.sh` (données et secrets conservés) |
+| Changer un réglage de sffs (langues, quotas…) | copier `vars/silosffs.yml` du catalogue dans `<SETTINGS_STORAGE>/vars/`, modifier `silosffs_langs`, `silosffs_per_quality`…, puis relancer l'application |
+| Désinstaller | supprimer l'application silosffs (le rôle `sffs_reader` reste dans la base StreamFusion : `DROP ROLE sffs_reader` pour le retirer) |
 
-Après une mise à jour de SSDV2 qui aurait nettoyé les fichiers non suivis, relance `ssd/install.sh --files`
-pour remettre les définitions.
+## Ancienne installation (`ssd/install.sh`)
+
+Jusqu'en octobre 2026, ce dépôt installait deux applications, `silosffs` et `sffs`, avec ses propres scripts
+(`ssd/`), et Silo voyait les fichiers sous `/mnt/sf`. Pour passer à l'application du catalogue :
+
+1. Sauvegarde la base : `docker exec db-silosffs pg_dump -U silo -d silo | gzip > ~/silosffs-avant-catalogue.sql.gz`
+2. Supprime les applications **sffs** puis **silosffs** en gardant les données
+   (`generique.sh suppression_appli sffs 0`, puis `silosffs 0`), et démonte l'ancien montage :
+   `sudo umount -l /mnt/sffs/sf; sudo rmdir /mnt/sffs/sf`
+3. Installe **silosffs** depuis le catalogue. Les secrets de l'ancienne installation (`sffs-secrets/`,
+   `silosffs-secrets/`) sont repris.
+
+Les chemins changent (`/mnt/sf/films` → `/mnt/sffs/films`) et la base est neuve (`postgres/` au lieu de
+`db-silosffs/`, l'ancienne reste sur disque) : recrée le compte admin et les bibliothèques.
 
 ## Dépannage spécifique
 
 | Symptôme | Cause et solution |
 |---|---|
-| `/mnt/sf` vide ou « Transport endpoint is not connected » dans Silo alors que `/mnt/sffs/sf` est rempli sur l'hôte | Propagation : `/mnt` doit être `shared` sur l'hôte. Silo monte le dossier parent `/mnt/sffs` en `rslave` (jamais `/mnt/sffs/sf` lui-même, qui figerait un montage mort après un redémarrage de sffs). Ancienne installation : `ssd/update.sh sffs` migre. |
+| `/mnt/sffs` vide ou « Transport endpoint is not connected » dans Silo alors qu'il est rempli sur l'hôte | Propagation : `/mnt` doit être `shared` sur l'hôte. sffs monte `/mnt` en `rshared`, Silo monte `/mnt` en `rslave` (jamais `/mnt/sffs` lui-même, qui figerait un montage mort après un redémarrage de sffs). |
 | `Transport endpoint is not connected` sur l'hôte | sffs arrêté brutalement : `docker restart sffs` (le conteneur nettoie le montage mort au démarrage). |
+| L'installation refuse : « base de Silo migrée par une version plus récente » | La base vient d'un Silo plus récent que `silo/BASE_COMMIT`. Attendre une mise à jour des patchs. |
 | sffs refuse toutes les lectures (`refus open … processus non autorisé` dans les journaux) | `pid: host` manquant : sffs ne voit pas quel programme lit. Vérifier `docker inspect -f '{{.HostConfig.PidMode}}' sffs`. |
 | Aucune version en cache (`cache movie/… : 30 sources, 0 en cache` dans `docker logs sffs`), StreamFusion journalise `NO_SERVER` | AllDebrid refuse l'adresse du serveur : le proxy `warp` est déconnecté. Test : `docker run --rm --network traefik_proxy curlimages/curl -s -x socks5h://warp:1080 https://www.cloudflare.com/cdn-cgi/trace \| grep warp` doit afficher `warp=on`. Sinon `docker restart warp`. Le conteneur peut rester « Up (unhealthy) » avec un démon WARP mort : Docker ne le relance pas tout seul. |
-| `sf-config.sh` : « aucun flux /playback/ » | URL du manifest incorrecte, StreamFusion injoignable depuis l'hôte, ou film de test sans source : relancer avec un autre identifiant IMDb (`deploy/bin/sf-config.sh <url> tt…`). |
+| Les nouveautés StreamFusion n'arrivent pas dans Silo | Pas de clé d'API : relancer l'application silosffs après avoir créé le compte admin (`silosffs-secrets/SFFS_SILO_KEY` doit exister). |
 
 Voir aussi [EXPLOITATION.md](EXPLOITATION.md) et [ARCHITECTURE.md](ARCHITECTURE.md).
