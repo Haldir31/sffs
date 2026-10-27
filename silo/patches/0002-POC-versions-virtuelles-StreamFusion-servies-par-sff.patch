@@ -1,0 +1,310 @@
+From fda3f500c4e58bf5bd5f9f7d7b780ecd801074b4 Mon Sep 17 00:00:00 2001
+From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
+Date: Mon, 26 Oct 2026 12:40:33 +0000
+Subject: [PATCH 2/7] POC: versions virtuelles StreamFusion servies par sffs
+ (FUSE)
+
+Les fichiers sous SILO_SF_ROOT viennent de sffs : leurs caracteristiques
+sont lues dans l'attribut user.sf.probe au lieu de ffprobe, le hash du
+contenu est saute, et la lecture arme le fichier (user.sf.arm) pour que
+sffs accepte de le lire chez le debrideur.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ internal/api/handlers/playback.go         |  3 +
+ internal/api/handlers/playback_missing.go |  3 +
+ internal/playback/directplay.go           |  2 +
+ internal/scanner/scanner.go               |  8 ++
+ internal/scanner/sf_virtual.go            | 79 ++++++++++++++++++
+ internal/sfvirtual/sfvirtual.go           | 98 +++++++++++++++++++++++
+ 6 files changed, 193 insertions(+)
+ create mode 100644 internal/scanner/sf_virtual.go
+ create mode 100644 internal/sfvirtual/sfvirtual.go
+
+diff --git a/internal/api/handlers/playback.go b/internal/api/handlers/playback.go
+index f16567d5b..0c477e6e2 100644
+--- a/internal/api/handlers/playback.go
++++ b/internal/api/handlers/playback.go
+@@ -36,6 +36,7 @@ import (
+ 	"github.com/Silo-Server/silo-server/internal/settingscontract"
+ 	"github.com/Silo-Server/silo-server/internal/settingskeys"
+ 	"github.com/Silo-Server/silo-server/internal/settingsresolve"
++	"github.com/Silo-Server/silo-server/internal/sfvirtual"
+ 	"github.com/Silo-Server/silo-server/internal/streamtelemetry"
+ 	"github.com/Silo-Server/silo-server/internal/streamtoken"
+ 	"github.com/Silo-Server/silo-server/internal/subtitles"
+@@ -495,6 +496,8 @@ func (h *PlaybackHandler) ensurePlaybackProbe(ctx context.Context, file *models.
+ 	if h == nil || h.ProbeEnsurer == nil || file == nil {
+ 		return file
+ 	}
++	// Une lecture commence : la version virtuelle StreamFusion devient lisible.
++	sfvirtual.Arm(file.FilePath)
+ 	repaired, err := h.ProbeEnsurer.EnsureCopySafetyCached(ctx, file)
+ 	if err != nil {
+ 		slog.WarnContext(ctx, "playback probe repair failed", "component", "api", "file_id", file.ID, "path", file.FilePath, "error", err)
+diff --git a/internal/api/handlers/playback_missing.go b/internal/api/handlers/playback_missing.go
+index 75f7875a1..f6fddccbe 100644
+--- a/internal/api/handlers/playback_missing.go
++++ b/internal/api/handlers/playback_missing.go
+@@ -14,6 +14,7 @@ import (
+ 	"github.com/Silo-Server/silo-server/internal/models"
+ 	"github.com/Silo-Server/silo-server/internal/playback"
+ 	"github.com/Silo-Server/silo-server/internal/scanner"
++	"github.com/Silo-Server/silo-server/internal/sfvirtual"
+ )
+ 
+ // MissingFileMarker marks media files as missing when playback discovers they
+@@ -102,6 +103,8 @@ func preflightPlaybackFile(
+ 		return &playbackFilePreflightError{notFound: true}
+ 	}
+ 
++	// Version virtuelle StreamFusion : autorise sa lecture (sans effet sur un fichier ordinaire).
++	sfvirtual.Arm(file.FilePath)
+ 	if _, err := os.Stat(file.FilePath); err != nil {
+ 		if os.IsNotExist(err) {
+ 			markPlaybackFileMissing(ctx, file, marker, eventsHub)
+diff --git a/internal/playback/directplay.go b/internal/playback/directplay.go
+index 978bf65bb..b1b3875e3 100644
+--- a/internal/playback/directplay.go
++++ b/internal/playback/directplay.go
+@@ -15,6 +15,7 @@ import (
+ 	"time"
+ 
+ 	"github.com/Silo-Server/silo-server/internal/httpstream"
++	"github.com/Silo-Server/silo-server/internal/sfvirtual"
+ )
+ 
+ // unknownMediaMIME is the MIME type of a file with an unknown extension.
+@@ -91,6 +92,7 @@ func ServeDirectPlay(w http.ResponseWriter, r *http.Request, filePath string) er
+ 	// WriteTimeout; roll the write deadline with progress instead.
+ 	streamWriter := httpstream.NewRollingDeadlineWriter(w)
+ 	w = streamWriter
++	sfvirtual.Arm(filePath)
+ 	// POC fork : un sidecar "<fichier>.remote" remplace le fichier par un flux HTTP distant.
+ 	if sc, err := readRemoteSidecar(filePath); err != nil {
+ 		slog.WarnContext(r.Context(), "remote poc: invalid sidecar, serving local file", "component", "playback", "error", err)
+diff --git a/internal/scanner/scanner.go b/internal/scanner/scanner.go
+index 453d69e9e..ffeb6f4e7 100644
+--- a/internal/scanner/scanner.go
++++ b/internal/scanner/scanner.go
+@@ -24,6 +24,7 @@ import (
+ 	"github.com/Silo-Server/silo-server/internal/naming"
+ 	"github.com/Silo-Server/silo-server/internal/pathscope"
+ 	"github.com/Silo-Server/silo-server/internal/rootcheck"
++	"github.com/Silo-Server/silo-server/internal/sfvirtual"
+ 	"github.com/Silo-Server/silo-server/internal/themesongs"
+ )
+ 
+@@ -4204,6 +4205,10 @@ func (s *Scanner) clearLegacyLinksForUnmatchableRoots(_ context.Context, _ int,
+ // gatherHints computes the OSHash for a media file.
+ func (s *Scanner) gatherHints(filePath string) FileHints {
+ 	hints := FileHints{}
++	// Version virtuelle StreamFusion : le hash lirait le fichier chez le débrideur.
++	if sfvirtual.IsVirtual(filePath) {
++		return hints
++	}
+ 	hash, err := ComputeOSHash(filePath)
+ 	if err != nil {
+ 		slog.Warn("scanner: OSHash computation failed", "path", filePath, "error", err)
+@@ -4222,6 +4227,9 @@ const probeSourceLocal = "local"
+ // file.
+ func (s *Scanner) probeFile(ctx context.Context, filePath string) (probe *ProbeData, probeSource string, rejected bool) {
+ 	probeSource = probeSourceLocal
++	if info, ok := sfvirtual.Probe(filePath); ok {
++		return sfProbeData(info), probeSourceSF, false
++	}
+ 	if s.ffprobePath == "" {
+ 		return nil, probeSource, false
+ 	}
+diff --git a/internal/scanner/sf_virtual.go b/internal/scanner/sf_virtual.go
+new file mode 100644
+index 000000000..0e6cec988
+--- /dev/null
++++ b/internal/scanner/sf_virtual.go
+@@ -0,0 +1,79 @@
++package scanner
++
++import (
++	"strings"
++
++	"github.com/Silo-Server/silo-server/internal/lang"
++	"github.com/Silo-Server/silo-server/internal/sfvirtual"
++)
++
++// probeSourceSF est le media_files.probe_source d'une version virtuelle StreamFusion :
++// ses caractéristiques viennent du nom de release, pas de ffprobe.
++const probeSourceSF = "streamfusion"
++
++// sfProbeData convertit les caractéristiques sffs en données de probe Silo.
++func sfProbeData(info *sfvirtual.Info) *ProbeData {
++	p := &ProbeData{
++		CodecVideo:    info.CodecVideo,
++		CodecAudio:    info.CodecAudio,
++		Resolution:    info.Resolution,
++		AudioChannels: info.Channels,
++		HDR:           info.HDR,
++		Container:     info.Container,
++		FormatTags:    map[string]string{"title": info.Release},
++	}
++	if p.Container == "mkv" {
++		p.Container = "matroska"
++	}
++	vt := VideoTrackInfo{
++		Codec:    info.CodecVideo,
++		Width:    info.Width,
++		Height:   info.Height,
++		BitDepth: info.BitDepth,
++	}
++	switch {
++	case info.DolbyVision:
++		// Profil inconnu : on suppose le cas courant (profil 8, repli HDR10).
++		vt.DVProfile, vt.DVBLCompatID, vt.DVBLCompatIDPresent, vt.DVConfigPresent = 8, 1, true, true
++		vt.DolbyVision = "Profile 8"
++		vt.VideoRange, vt.VideoRangeType = "DolbyVision", "DOVIWithHDR10"
++		if info.HDR10Plus {
++			vt.VideoRangeType = "DOVIWithHDR10Plus"
++		}
++		vt.ColorTransfer, vt.ColorPrimaries, vt.ColorSpace = "smpte2084", "bt2020", "bt2020nc"
++	case info.HDR:
++		vt.VideoRange, vt.VideoRangeType = "HDR", "HDR10"
++		if info.HDR10Plus {
++			vt.VideoRangeType, vt.HDR10Plus = "HDR10Plus", true
++		}
++		vt.ColorTransfer, vt.ColorPrimaries, vt.ColorSpace = "smpte2084", "bt2020", "bt2020nc"
++	default:
++		vt.VideoRangeType = "SDR"
++	}
++	if vt.BitDepth == 0 && (info.HDR || info.DolbyVision) {
++		vt.BitDepth = 10
++	}
++	if info.CodecVideo != "" {
++		p.VideoTracks = []VideoTrackInfo{vt}
++	}
++
++	// Une piste audio par langue annoncée ("multi" seul = langue inconnue).
++	langs := []string{}
++	for _, l := range info.Languages {
++		if l = strings.ToLower(strings.TrimSpace(l)); l != "" && l != "multi" && l != "vo" {
++			langs = append(langs, l)
++		}
++	}
++	if len(langs) == 0 {
++		langs = []string{""}
++	}
++	for i, l := range langs {
++		p.AudioTracks = append(p.AudioTracks, AudioTrackInfo{
++			Language: lang.CompatibleTag(l),
++			Codec:    info.CodecAudio,
++			Channels: info.Channels,
++			Default:  i == 0,
++		})
++	}
++	return p
++}
+diff --git a/internal/sfvirtual/sfvirtual.go b/internal/sfvirtual/sfvirtual.go
+new file mode 100644
+index 000000000..4722ac67b
+--- /dev/null
++++ b/internal/sfvirtual/sfvirtual.go
+@@ -0,0 +1,98 @@
++// Package sfvirtual reconnaît les fichiers virtuels exposés par sffs (bibliothèque StreamFusion).
++//
++// sffs présente les torrents de StreamFusion comme des fichiers sous SILO_SF_ROOT (défaut
++// /mnt/sf). Leurs caractéristiques sont lues dans l'attribut étendu user.sf.probe au lieu de
++// ffprobe, et leurs octets ne sont accessibles qu'après Arm (user.sf.arm), appelé au lancement
++// d'une lecture : les lectures de fond (vignettes, analyses) n'atteignent jamais le débrideur.
++package sfvirtual
++
++import (
++	"encoding/json"
++	"errors"
++	"os"
++	"strings"
++	"syscall"
++)
++
++const (
++	attrProbe = "user.sf.probe"
++	attrArm   = "user.sf.arm"
++)
++
++// Info décrit une version telle que sffs la tire de la base StreamFusion.
++type Info struct {
++	Container   string   `json:"container"`
++	Resolution  string   `json:"resolution"`
++	Width       int      `json:"width"`
++	Height      int      `json:"height"`
++	CodecVideo  string   `json:"codec_video"`
++	CodecAudio  string   `json:"codec_audio"`
++	Channels    int      `json:"channels"`
++	HDR         bool     `json:"hdr"`
++	DolbyVision bool     `json:"dolby_vision"`
++	HDR10Plus   bool     `json:"hdr10_plus"`
++	BitDepth    int      `json:"bit_depth"`
++	Languages   []string `json:"languages"`
++	Quality     string   `json:"quality"`
++	Release     string   `json:"release"`
++	InfoHash    string   `json:"info_hash"`
++	Indexer     string   `json:"indexer"`
++}
++
++func root() string {
++	if r := strings.TrimRight(os.Getenv("SILO_SF_ROOT"), "/"); r != "" {
++		return r
++	}
++	return "/mnt/sf"
++}
++
++// Under indique si path est sous la racine sffs (aucun appel système).
++func Under(path string) bool {
++	r := root()
++	return path == r || strings.HasPrefix(path, r+"/")
++}
++
++func getxattr(path, name string) ([]byte, error) {
++	buf := make([]byte, 4096)
++	for {
++		n, err := syscall.Getxattr(path, name, buf)
++		if errors.Is(err, syscall.ERANGE) {
++			buf = make([]byte, len(buf)*4)
++			continue
++		}
++		if err != nil {
++			return nil, err
++		}
++		return buf[:n], nil
++	}
++}
++
++// Probe renvoie les caractéristiques d'un fichier virtuel, ou ok=false pour un fichier ordinaire.
++func Probe(path string) (*Info, bool) {
++	if !Under(path) {
++		return nil, false
++	}
++	b, err := getxattr(path, attrProbe)
++	if err != nil {
++		return nil, false
++	}
++	var info Info
++	if json.Unmarshal(b, &info) != nil {
++		return nil, false
++	}
++	return &info, true
++}
++
++// IsVirtual indique si path est un fichier virtuel sffs.
++func IsVirtual(path string) bool {
++	_, ok := Probe(path)
++	return ok
++}
++
++// Arm autorise la lecture de path pendant quelques heures. Sans effet sur un fichier ordinaire.
++func Arm(path string) {
++	if !Under(path) {
++		return
++	}
++	_, _ = getxattr(path, attrArm)
++}
+-- 
+2.55.0
+

@@ -1,0 +1,241 @@
+From 55d098321edca769d3b73ebee0baab5ff0080cfb Mon Sep 17 00:00:00 2001
+From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
+Date: Mon, 26 Oct 2026 10:41:51 +0100
+Subject: [PATCH 1/7] POC: direct play d'un flux HTTP distant via sidecar
+ .remote
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Activé par SILO_POC_REMOTE=1. Un fichier <media>.remote (url=, mode=proxy|redirect,
+header=) remplace le transport du direct play : proxy HTTP avec Range ou redirection 302.
+Remux et transcodage lisent toujours le fichier local.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PEgiyBsa7FUynRcf67DpPE
+---
+ internal/playback/directplay.go |   6 +
+ internal/playback/remote_poc.go | 194 ++++++++++++++++++++++++++++++++
+ 2 files changed, 200 insertions(+)
+ create mode 100644 internal/playback/remote_poc.go
+
+diff --git a/internal/playback/directplay.go b/internal/playback/directplay.go
+index a6bd38d5c..978bf65bb 100644
+--- a/internal/playback/directplay.go
++++ b/internal/playback/directplay.go
+@@ -91,6 +91,12 @@ func ServeDirectPlay(w http.ResponseWriter, r *http.Request, filePath string) er
+ 	// WriteTimeout; roll the write deadline with progress instead.
+ 	streamWriter := httpstream.NewRollingDeadlineWriter(w)
+ 	w = streamWriter
++	// POC fork : un sidecar "<fichier>.remote" remplace le fichier par un flux HTTP distant.
++	if sc, err := readRemoteSidecar(filePath); err != nil {
++		slog.WarnContext(r.Context(), "remote poc: invalid sidecar, serving local file", "component", "playback", "error", err)
++	} else if sc != nil {
++		return serveRemoteSidecar(w, r, filePath, sc)
++	}
+ 	f, err := os.Open(filePath)
+ 	if err != nil {
+ 		if os.IsNotExist(err) {
+diff --git a/internal/playback/remote_poc.go b/internal/playback/remote_poc.go
+new file mode 100644
+index 000000000..58fb5f3e9
+--- /dev/null
++++ b/internal/playback/remote_poc.go
+@@ -0,0 +1,194 @@
++package playback
++
++// POC (fork privé) : servir un flux HTTP distant à la place d'un fichier local, en direct play.
++//
++// Activé uniquement si la variable d'environnement SILO_POC_REMOTE=1.
++// Un fichier "sidecar" placé à côté du média, nommé "<fichier média>.remote", déclare la source :
++//
++//	url=https://exemple/chemin/film.mkv
++//	mode=proxy            # proxy (défaut) : le serveur relaie le flux ; redirect : 302 vers l'URL
++//	header=User-Agent: X  # optionnel, répétable : en-têtes envoyés à la source distante
++//
++// Le fichier média local reste nécessaire : le scanner et le planificateur de lecture
++// s'appuient sur son probe. Seul le transport du direct play est remplacé ; le remux et
++// le transcodage lisent toujours le fichier local.
++
++import (
++	"bufio"
++	"bytes"
++	"errors"
++	"fmt"
++	"io"
++	"log/slog"
++	"net"
++	"net/http"
++	"os"
++	"strings"
++	"time"
++)
++
++const remotePOCEnv = "SILO_POC_REMOTE"
++
++type remoteSidecar struct {
++	URL     string
++	Mode    string // "proxy" ou "redirect"
++	Headers http.Header
++}
++
++// remoteHTTPClient suit les redirections (fréquentes chez les débrideurs) et n'impose
++// pas de timeout global : un flux vidéo dure aussi longtemps que la lecture.
++var remoteHTTPClient = &http.Client{
++	Transport: &http.Transport{
++		Proxy:                 http.ProxyFromEnvironment,
++		DialContext:           (&net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
++		TLSHandshakeTimeout:   15 * time.Second,
++		ResponseHeaderTimeout: 30 * time.Second,
++		MaxIdleConnsPerHost:   8,
++		IdleConnTimeout:       90 * time.Second,
++	},
++}
++
++// readRemoteSidecar renvoie (nil, nil) quand le POC est désactivé ou qu'aucun sidecar n'existe.
++func readRemoteSidecar(filePath string) (*remoteSidecar, error) {
++	if os.Getenv(remotePOCEnv) != "1" {
++		return nil, nil
++	}
++	data, err := os.ReadFile(filePath + ".remote")
++	if err != nil {
++		if errors.Is(err, os.ErrNotExist) {
++			return nil, nil
++		}
++		return nil, err
++	}
++	return parseRemoteSidecar(data)
++}
++
++func parseRemoteSidecar(data []byte) (*remoteSidecar, error) {
++	sc := &remoteSidecar{Mode: "proxy", Headers: http.Header{}}
++	s := bufio.NewScanner(bytes.NewReader(data))
++	for s.Scan() {
++		line := strings.TrimSpace(s.Text())
++		if line == "" || strings.HasPrefix(line, "#") {
++			continue
++		}
++		key, value, ok := strings.Cut(line, "=")
++		if !ok {
++			// Une ligne seule est acceptée comme URL.
++			key, value = "url", line
++		}
++		key, value = strings.ToLower(strings.TrimSpace(key)), strings.TrimSpace(value)
++		switch key {
++		case "url":
++			sc.URL = value
++		case "mode":
++			sc.Mode = strings.ToLower(value)
++		case "header":
++			name, v, ok := strings.Cut(value, ":")
++			if ok {
++				sc.Headers.Add(strings.TrimSpace(name), strings.TrimSpace(v))
++			}
++		}
++	}
++	if err := s.Err(); err != nil {
++		return nil, err
++	}
++	if !strings.HasPrefix(sc.URL, "http://") && !strings.HasPrefix(sc.URL, "https://") {
++		return nil, fmt.Errorf("remote sidecar: url http(s) manquante")
++	}
++	if sc.Mode != "proxy" && sc.Mode != "redirect" {
++		return nil, fmt.Errorf("remote sidecar: mode inconnu %q", sc.Mode)
++	}
++	return sc, nil
++}
++
++// remotePassHeaders sont recopiés de la réponse distante vers le client.
++var remotePassHeaders = []string{
++	"Content-Type", "Content-Length", "Content-Range", "Accept-Ranges", "ETag", "Last-Modified",
++}
++
++func serveRemoteSidecar(w http.ResponseWriter, r *http.Request, filePath string, sc *remoteSidecar) error {
++	ctx := r.Context()
++	host := remoteHost(sc.URL)
++
++	if sc.Mode == "redirect" {
++		slog.InfoContext(ctx, "remote poc: redirect", "component", "playback", "host", host, "range", r.Header.Get("Range"))
++		http.Redirect(w, r, sc.URL, http.StatusFound)
++		return nil
++	}
++
++	method := http.MethodGet
++	if r.Method == http.MethodHead {
++		method = http.MethodHead
++	}
++	req, err := http.NewRequestWithContext(ctx, method, sc.URL, nil)
++	if err != nil {
++		http.Error(w, "bad remote url", http.StatusBadGateway)
++		return err
++	}
++	for name, values := range sc.Headers {
++		for _, v := range values {
++			req.Header.Add(name, v)
++		}
++	}
++	for _, name := range []string{"Range", "If-Range"} {
++		if v := r.Header.Get(name); v != "" {
++			req.Header.Set(name, v)
++		}
++	}
++	if req.Header.Get("User-Agent") == "" {
++		req.Header.Set("User-Agent", "Mozilla/5.0")
++	}
++
++	started := time.Now()
++	resp, err := remoteHTTPClient.Do(req)
++	if err != nil {
++		slog.WarnContext(ctx, "remote poc: upstream error", "component", "playback", "host", host, "error", err)
++		http.Error(w, "remote source unavailable", http.StatusBadGateway)
++		return err
++	}
++	defer resp.Body.Close()
++
++	h := w.Header()
++	h.Del("ETag")
++	for _, name := range remotePassHeaders {
++		if v := resp.Header.Get(name); v != "" {
++			h.Set(name, v)
++		}
++	}
++	if ct := h.Get("Content-Type"); ct == "" || strings.HasPrefix(ct, "application/octet-stream") || strings.HasPrefix(ct, "binary/") {
++		h.Set("Content-Type", MimeFromExtension(filePath))
++	}
++	if h.Get("Accept-Ranges") == "" {
++		h.Set("Accept-Ranges", "bytes")
++	}
++	w.WriteHeader(resp.StatusCode)
++
++	var sent int64
++	if method == http.MethodGet {
++		sent, err = io.Copy(w, resp.Body)
++	}
++	slog.InfoContext(ctx, "remote poc: proxy ended", "component", "playback",
++		"host", host,
++		"status", resp.StatusCode,
++		"range", r.Header.Get("Range"),
++		"bytes_sent", sent,
++		"duration_ms", time.Since(started).Milliseconds(),
++		"error", errString(err),
++	)
++	return nil
++}
++
++func remoteHost(raw string) string {
++	rest := raw[strings.Index(raw, "//")+2:]
++	if i := strings.IndexAny(rest, "/?"); i >= 0 {
++		return rest[:i]
++	}
++	return rest
++}
++
++func errString(err error) string {
++	if err == nil {
++		return ""
++	}
++	return err.Error()
++}
+-- 
+2.55.0
+

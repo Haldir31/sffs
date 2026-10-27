@@ -1,0 +1,171 @@
+From 4f665766f99b85efaefc67619e5838c30ba03d65 Mon Sep 17 00:00:00 2001
+From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
+Date: Mon, 26 Oct 2026 20:23:18 +0000
+Subject: [PATCH 7/7] =?UTF-8?q?POC:=20probe=20de=20la=20source=20r=C3=A9el?=
+ =?UTF-8?q?lement=20servie=20par=20sffs=20(rempla=C3=A7ante=20comprise)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+sffs peut remplacer une version hors cache par une autre (autre codec, autres pistes, autre
+taille). Au lancement d'une lecture, si probe_source ne vaut pas sf:<hash servi>, ffprobe
+analyse la source servie et la ligne media_files est réécrite (pistes, codecs, taille réelle).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AbUx511UGbcCoLk6U5BQjP
+---
+ internal/scanner/probe_repair.go | 78 ++++++++++++++++++++++++++++++++
+ internal/sfvirtual/sfvirtual.go  | 27 +++++++++++
+ 2 files changed, 105 insertions(+)
+
+diff --git a/internal/scanner/probe_repair.go b/internal/scanner/probe_repair.go
+index 8690f55d2..901023e99 100644
+--- a/internal/scanner/probe_repair.go
++++ b/internal/scanner/probe_repair.go
+@@ -3,7 +3,9 @@ package scanner
+ import (
+ 	"context"
+ 	"errors"
++	"fmt"
+ 	"log/slog"
++	"os"
+ 	"strconv"
+ 	"strings"
+ 	"sync"
+@@ -422,6 +424,16 @@ func (e *PlaybackProbeEnsurer) ensureProbeRepair(ctx context.Context, file *mode
+ 	// One snapshot per repair: the guard and the ffprobe run must see the same
+ 	// binaries, or a SetFFmpegPath between them hands probeFile an empty path.
+ 	ffprobePath := strings.TrimSpace(e.binaries().ffprobePath)
++	// Version virtuelle armée et en cache : la probe doit décrire la source que sffs sert
++	// réellement (une remplaçante peut avoir un autre codec, d'autres pistes, une autre taille).
++	if sfvirtual.Under(file.FilePath) && ffprobePath != "" {
++		if marker := sfvirtual.ServedMarker(file.FilePath); marker != "" {
++			if file.ProbeSource != marker {
++				return e.ensureSFServedProbe(ctx, file, ffprobePath, marker)
++			}
++			return file, nil
++		}
++	}
+ 	if NeedsCriticalProbeRepair(file) && ffprobePath != "" {
+ 		repaired, err := e.ensureCriticalProbe(ctx, file, ffprobePath)
+ 		if err != nil {
+@@ -510,6 +522,72 @@ func (e *PlaybackProbeEnsurer) ensureCriticalProbe(ctx context.Context, file *mo
+ 	}
+ }
+ 
++// ensureSFServedProbe analyse avec ffprobe la source que sffs sert réellement pour une version
++// virtuelle (armée, en cache) et enregistre le résultat avec probe_source = marker, ainsi que la
++// taille réelle du fichier. Une seule analyse à la fois par fichier et par source.
++func (e *PlaybackProbeEnsurer) ensureSFServedProbe(ctx context.Context, file *models.MediaFile, ffprobePath, marker string) (*models.MediaFile, error) {
++	sharedCtx := context.WithoutCancel(ctx)
++	key := fmt.Sprintf("sfserved:%d:%s", file.ID, marker)
++	resultCh := e.probeRepair.DoChan(key, func() (any, error) {
++		lookupCtx, cancelLookup := context.WithTimeout(sharedCtx, 10*time.Second)
++		current, err := e.fileRepo.GetByID(lookupCtx, file.ID)
++		cancelLookup()
++		if err != nil {
++			return nil, err
++		}
++		if current == nil || current.ProbeSource == marker {
++			return current, nil
++		}
++		// Lecture distante (débrideur) : plus lente qu'un disque local.
++		probeCtx, cancel := context.WithTimeout(sharedCtx, 90*time.Second)
++		defer cancel()
++		if e.probeSlots != nil {
++			select {
++			case e.probeSlots <- struct{}{}:
++				defer func() { <-e.probeSlots }()
++			case <-probeCtx.Done():
++				return nil, probeCtx.Err()
++			}
++		}
++		probeFile := e.probeFile
++		if probeFile == nil {
++			probeFile = probeFileStreamsOnly
++		}
++		t0 := time.Now()
++		probe, err := probeFile(probeCtx, ffprobePath, current.FilePath)
++		if err != nil || probe == nil {
++			slog.WarnContext(sharedCtx, "streamfusion: probe de la source servie impossible", "component", "scanner", "file_id", current.ID, "source", marker, "error", err)
++			if err == nil {
++				err = fmt.Errorf("streamfusion: probe vide")
++			}
++			return nil, err
++		}
++		updated := *current
++		applyProbeData(&updated, probe, marker)
++		if st, statErr := os.Stat(current.FilePath); statErr == nil && st.Size() > 0 {
++			updated.FileSize = st.Size()
++		}
++		slog.InfoContext(sharedCtx, "streamfusion: probe de la source servie", "component", "scanner",
++			"file_id", current.ID, "source", marker, "previous_source", current.ProbeSource,
++			"codec_video", updated.CodecVideo, "codec_audio", updated.CodecAudio,
++			"previous_codec_video", current.CodecVideo, "size", updated.FileSize, "took_ms", time.Since(t0).Milliseconds())
++		return e.fileRepo.Upsert(probeCtx, updated)
++	})
++	select {
++	case <-ctx.Done():
++		return file, ctx.Err()
++	case result := <-resultCh:
++		if result.Err != nil {
++			return file, result.Err
++		}
++		repaired, _ := result.Val.(*models.MediaFile)
++		if repaired == nil {
++			return file, nil
++		}
++		return repaired, nil
++	}
++}
++
+ // recordProbeRejection persists that ffprobe refused the file and returns the
+ // row as stored afterwards, so the planner can answer with a terminal that
+ // names the damaged file instead of one that suggests waiting for a scan. It
+diff --git a/internal/sfvirtual/sfvirtual.go b/internal/sfvirtual/sfvirtual.go
+index 4102e1b38..e844dd7ae 100644
+--- a/internal/sfvirtual/sfvirtual.go
++++ b/internal/sfvirtual/sfvirtual.go
+@@ -19,8 +19,14 @@ const (
+ 	attrArm    = "user.sf.arm"
+ 	attrArmed  = "user.sf.armed"
+ 	attrCached = "user.sf.cached"
++	attrServed = "user.sf.served"
+ )
+ 
++// ServedMarkerPrefix préfixe media_files.probe_source quand la probe décrit la source que sffs
++// sert réellement : "sf:<hash>". sffs peut remplacer une version absente du cache par une autre
++// (autre codec, autres pistes, autre taille) : une probe faite sur une autre source est périmée.
++const ServedMarkerPrefix = "sf:"
++
+ // Info décrit une version telle que sffs la tire de la base StreamFusion.
+ type Info struct {
+ 	Container   string   `json:"container"`
+@@ -117,3 +123,24 @@ func Arm(path string) {
+ 	}
+ 	_, _ = getxattr(path, attrArm)
+ }
++
++// Served renvoie le hash de la source que sffs sert réellement pour path (la remplaçante s'il y en
++// a une), ou "" si la version est hors cache, si path n'est pas virtuel ou si sffs est trop ancien.
++func Served(path string) string {
++	if !Under(path) {
++		return ""
++	}
++	b, err := getxattr(path, attrServed)
++	if err != nil {
++		return ""
++	}
++	return strings.TrimSpace(string(b))
++}
++
++// ServedMarker renvoie la valeur de probe_source d'une probe faite sur la source servie.
++func ServedMarker(path string) string {
++	if h := Served(path); h != "" {
++		return ServedMarkerPrefix + h
++	}
++	return ""
++}
+-- 
+2.55.0
+

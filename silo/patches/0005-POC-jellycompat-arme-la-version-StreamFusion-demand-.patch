@@ -1,0 +1,59 @@
+From da5a2a688664028b252f256b662553f000d28737 Mon Sep 17 00:00:00 2001
+From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
+Date: Mon, 26 Oct 2026 13:59:25 +0000
+Subject: [PATCH 5/7] =?UTF-8?q?POC:=20jellycompat=20arme=20la=20version=20?=
+ =?UTF-8?q?StreamFusion=20demand=C3=A9e=20dans=20PlaybackInfo?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ internal/jellycompat/handlers_playback.go | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+diff --git a/internal/jellycompat/handlers_playback.go b/internal/jellycompat/handlers_playback.go
+index 268262dc1..2718dca6b 100644
+--- a/internal/jellycompat/handlers_playback.go
++++ b/internal/jellycompat/handlers_playback.go
+@@ -37,6 +37,7 @@ import (
+ 	"github.com/Silo-Server/silo-server/internal/nodepool"
+ 	"github.com/Silo-Server/silo-server/internal/noderouting"
+ 	"github.com/Silo-Server/silo-server/internal/playback"
++	"github.com/Silo-Server/silo-server/internal/sfvirtual"
+ 	"github.com/Silo-Server/silo-server/internal/streamlocation"
+ 	"github.com/Silo-Server/silo-server/internal/streamtoken"
+ 	"github.com/Silo-Server/silo-server/internal/subtitles"
+@@ -2215,6 +2216,7 @@ func (h *PlaybackHandler) HandlePlaybackInfo(w http.ResponseWriter, r *http.Requ
+ 	if req.MediaSourceID == "" {
+ 		req.MediaSourceID = pathMediaSourceID
+ 	}
++	h.armRequestedVirtualSource(r.Context(), req.MediaSourceID)
+ 	req.serverBitrateCapKbps, err = h.serverBitrateCap(r.Context(), session)
+ 	if err != nil {
+ 		writeError(w, http.StatusServiceUnavailable, "PlaybackUnavailable", "The server could not resolve the stream bitrate limit")
+@@ -4036,3 +4038,21 @@ func compatSubtitleProfileFormat(codec string) string {
+ 		return strings.ToLower(strings.TrimSpace(codec))
+ 	}
+ }
++
++// armRequestedVirtualSource arme la version virtuelle StreamFusion que le client va lire, pour
++// que la préparation de PlaybackInfo puisse l'analyser (durée, pistes). Les autres versions de
++// l'élément restent non armées. Sans effet sur un fichier ordinaire.
++func (h *PlaybackHandler) armRequestedVirtualSource(ctx context.Context, mediaSourceID string) {
++	if mediaSourceID == "" || h.fileResolver == nil {
++		return
++	}
++	fileID, err := h.codec.DecodeIntID(EncodedIDMediaSource, mediaSourceID)
++	if err != nil || fileID <= 0 {
++		return
++	}
++	file, err := h.fileResolver.GetByID(ctx, int(fileID))
++	if err != nil || file == nil {
++		return
++	}
++	sfvirtual.Arm(file.FilePath)
++}
+-- 
+2.55.0
+

@@ -1,0 +1,64 @@
+From f1a35dc59af04b2df56f69098cf98a969cc79d42 Mon Sep 17 00:00:00 2001
+From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
+Date: Mon, 26 Oct 2026 13:41:09 +0000
+Subject: [PATCH 3/7] =?UTF-8?q?POC:=20pas=20de=20r=C3=A9paration=20de=20pr?=
+ =?UTF-8?q?obe=20ni=20de=20scan=20copy-safety=20pour=20les=20versions=20St?=
+ =?UTF-8?q?reamFusion?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Ces analyses lanceraient ffprobe/ffmpeg sur le fichier, donc chez le
+debrideur ; leurs caracteristiques viennent de StreamFusion.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ internal/scanner/probe_repair.go | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/internal/scanner/probe_repair.go b/internal/scanner/probe_repair.go
+index 0ef1b64c4..83bea74bd 100644
+--- a/internal/scanner/probe_repair.go
++++ b/internal/scanner/probe_repair.go
+@@ -12,6 +12,7 @@ import (
+ 
+ 	"github.com/Silo-Server/silo-server/internal/mediaprobe"
+ 	"github.com/Silo-Server/silo-server/internal/models"
++	"github.com/Silo-Server/silo-server/internal/sfvirtual"
+ 	"github.com/Silo-Server/silo-server/internal/tonemap"
+ 	"golang.org/x/sync/singleflight"
+ )
+@@ -327,6 +328,9 @@ func (e *PlaybackProbeEnsurer) NeedsCopySafetyScan(file *models.MediaFile) bool
+ 	if e == nil || strings.TrimSpace(e.binaries().ffmpegPath) == "" || !needsCopySafetyProbe(file) {
+ 		return false
+ 	}
++	if file != nil && sfvirtual.Under(file.FilePath) {
++		return false
++	}
+ 	_, known := e.knownCopySafetyVerdict(file)
+ 	return !known
+ }
+@@ -399,6 +403,11 @@ func (e *PlaybackProbeEnsurer) ensureProbeRepair(ctx context.Context, file *mode
+ 	if file == nil || e == nil || e.fileRepo == nil {
+ 		return file, nil
+ 	}
++	// Version virtuelle StreamFusion : ses caractéristiques viennent de StreamFusion, et un
++	// ffprobe lirait le fichier chez le débrideur.
++	if sfvirtual.Under(file.FilePath) {
++		return file, nil
++	}
+ 
+ 	current := file
+ 	// One snapshot per repair: the guard and the ffprobe run must see the same
+@@ -544,7 +553,7 @@ func (e *PlaybackProbeEnsurer) recordProbeRejection(ctx context.Context, current
+ // longer re-reads the opening seconds of every browsed H.264 file.
+ func (e *PlaybackProbeEnsurer) ensureCopySafety(ctx context.Context, file *models.MediaFile) (*models.MediaFile, error) {
+ 	ffmpegPath := strings.TrimSpace(e.binaries().ffmpegPath)
+-	if !needsCopySafetyProbe(file) || ffmpegPath == "" {
++	if !needsCopySafetyProbe(file) || ffmpegPath == "" || sfvirtual.Under(file.FilePath) {
+ 		return file, nil
+ 	}
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,6 @@
+# Aucun secret ni binaire dans le dépôt : la configuration réelle vit dans $SFFS_STACK/config.
+*.env
+!*.env.example
+sffs/sffs
+*.log
+run/
