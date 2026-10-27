@@ -77,6 +77,41 @@ Clients :
 - **Navigateur :** `https://<sous-domaine>.<domaine>`
 - **Applications Jellyfin** (Apple TV, Infuse, Swiftfin…) : serveur `https://<sous-domaine>-jf.<domaine>`
 
+## Options de l'application sffs
+
+Pour changer une option : copier `includes/dockerapps/vars/sffs.yml` du catalogue SSDV2 dans
+`<SETTINGS_STORAGE>/vars/sffs.yml`, la modifier, puis relancer l'application sffs. L'arborescence est mise à
+jour sur place, et Silo voit les changements à son prochain scan.
+
+| Option | Défaut | Effet |
+|---|---|---|
+| `sffs_langs` | `fr` | Langues voulues, par ordre de préférence (`fr,en`…) |
+| `sffs_per_quality` | `5` | Versions gardées par qualité (2160p, 1080p, 720p…) pour un film |
+| `sffs_series` | `1` | `0` : films seulement |
+| `sffs_series_per_quality` | `2` | Versions par qualité et par épisode |
+| `sffs_cached_only` | `0` | `1` : **seulement les versions déjà en cache chez AllDebrid**. Voir ci-dessous |
+| `sffs_repo`, `sffs_repo_version` | ce dépôt, `main` | Sources de sffs et des patchs Silo |
+| `sffs_registry` | `ghcr.io/haldir31` | Registre des images ; vide : construction sur le serveur |
+| `sffs_build_local` | `false` | `true` : toujours construire les images sur le serveur |
+
+Toujours appliqué, sans option : au moins un REMUX 2160p et un REMUX 1080p quand il en existe, et jamais de
+CAM, screener, 3D ni d'image disque (ISO, BDMV, COMPLETE/Full BluRay…), que Silo ne sait pas lire.
+
+### Mode « en cache seulement » (`sffs_cached_only: '1'`)
+
+sffs ne propose que les versions vues en cache chez AllDebrid : celles que StreamFusion a marquées disponibles
+(colonne `availability`), et celles que sffs a lui-même vues en cache lors d'une lecture. Un titre sans aucune
+version en cache n'apparaît pas.
+
+- **Avantage :** toute version proposée démarre sans attente de téléchargement chez AllDebrid.
+- **Inconvénient :** beaucoup moins de titres. Mesure sur une base de 1,2 million de torrents : environ 16 700
+  films (36 400 versions) au lieu de 43 250 (162 300 versions).
+- **Au fil du temps :** quand une version passe en cache, la surveillance la voit et fait apparaître son titre
+  dans la minute. Le cache d'AllDebrid peut aussi s'être vidé depuis la vérification de StreamFusion : à la
+  lecture, sffs remplace alors la version par une source en cache de même qualité, comme en mode normal.
+- **Activer ou désactiver** ajoute ou retire des milliers de titres : Silo les marque manquants (ou les
+  ajoute) à ses scans suivants, sans toucher à l'historique de lecture des titres qui restent.
+
 ## Au quotidien
 
 | Action | Comment |
@@ -84,8 +119,7 @@ Clients :
 | Mettre à jour sffs et Silo modifié | relancer l'application sffs (sources mises à jour, images téléchargées ou reconstruites si besoin, Silo redéployé) |
 | Redémarrer sffs | `docker restart sffs` (Silo voit le nouveau montage sans redémarrer) |
 | Journaux | `docker logs -f sffs` · `docker logs -f silo` |
-| Changer un réglage de sffs (langues, quotas…) | copier `vars/sffs.yml` du catalogue dans `<SETTINGS_STORAGE>/vars/`, modifier `sffs_langs`, `sffs_per_quality`…, puis relancer sffs |
-| Ne garder que les versions en cache | `sffs_cached_only: '1'` dans ce même fichier, puis relancer sffs : environ 17 000 films au lieu de 43 000, mais chaque version proposée est déjà en cache chez AllDebrid |
+| Changer une option de sffs | voir [Options de l'application sffs](#options-de-lapplication-sffs) |
 | Retirer sffs | supprimer l'application sffs : `vars/silo.yml` est retiré, et silo repasse à l'image officielle à sa prochaine relance (sa base est gardée). Le rôle `sffs_reader` reste dans la base StreamFusion (`DROP ROLE sffs_reader`) |
 
 Ne mets pas à jour `silo` vers une image officielle plus récente tant que sffs est installé : la base serait
