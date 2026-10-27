@@ -22,7 +22,13 @@ Ce que fait l'installation :
 
 ## Prérequis
 
-- SSDV2 installé, avec **StreamFusion installé par SSDV2** : conteneurs `stream-fusion` et `stremio-postgres` démarrés.
+- SSDV2 installé, avec **StreamFusion installé par SSDV2** : conteneurs `stream-fusion` (ou `streamfusion`) et
+  `stremio-postgres` démarrés, et StreamFusion **fonctionnel** : l'addon Stremio doit déjà afficher des sources
+  en cache. Sur un serveur (datacenter), AllDebrid n'accepte StreamFusion que via le proxy `warp` de SSDV2 ;
+  vérifie qu'il est connecté (voir Dépannage).
+- Un compte **AllDebrid** (clé API) et une clé **TMDB** (déjà renseignée dans StreamFusion).
+- Aucun Silo préalable n'est nécessaire : l'installation fournit le sien (`silosffs`), indépendant d'un
+  éventuel Silo officiel déjà installé par SSDV2.
 - `/dev/fuse` présent, et `/mnt` en propagation partagée (`findmnt -o PROPAGATION /mnt` affiche `shared`).
   C'est le cas par défaut, et c'est déjà nécessaire pour decypharr ou zurg.
 - `git`, `curl`, `openssl` (déjà présents avec SSDV2).
@@ -37,6 +43,11 @@ Avec l'utilisateur SSDV2 (pas root) :
 git clone https://github.com/Haldir31/sffs.git ~/sffs
 cd ~/sffs
 ```
+
+Le dépôt est privé : il faut avoir été invité comme collaborateur. `git clone` demande alors l'identifiant
+GitHub et, comme mot de passe, un jeton d'accès personnel (GitHub → Settings → Developer settings →
+Personal access tokens, droit lecture sur le dépôt). Avec la CLI GitHub : `gh auth login` puis
+`gh repo clone Haldir31/sffs ~/sffs`.
 
 Le dépôt doit rester à cet endroit : SSDV2 y reconstruit les images lors des réinstallations.
 
@@ -84,7 +95,10 @@ Le script :
    ```bash
    ssd/silo-key.sh
    ```
-   Le script crée une clé d'API Silo pour sffs, l'enregistre dans les secrets et redéploie sffs.
+   Le script crée une clé d'API Silo pour sffs et l'enregistre dans les secrets. Il redéploie ensuite sffs,
+   mais seulement **après la fin des scans Silo en cours** (le redéploiement démonte `/mnt/sffs` une minute).
+   Pendant le premier scan, lance-le donc en arrière-plan :
+   `setsid nohup ssd/silo-key.sh > ~/sffs-silo-key.log 2>&1 &`
 
 ### 5. Clients
 
@@ -111,6 +125,7 @@ pour remettre les définitions.
 | `/mnt/sffs` vide dans Silo alors qu'il est rempli sur l'hôte | Propagation : `/mnt` doit être `shared` sur l'hôte. Silo monte `/mnt/sffs` en `rslave`. |
 | `Transport endpoint is not connected` sur l'hôte | sffs arrêté brutalement : `docker restart sffs` (le conteneur nettoie le montage mort au démarrage). |
 | sffs refuse toutes les lectures (`refus open … processus non autorisé` dans les journaux) | `pid: host` manquant : sffs ne voit pas quel programme lit. Vérifier `docker inspect -f '{{.HostConfig.PidMode}}' sffs`. |
+| Aucune version en cache (`cache movie/… : 30 sources, 0 en cache` dans `docker logs sffs`), StreamFusion journalise `NO_SERVER` | AllDebrid refuse l'adresse du serveur : le proxy `warp` est déconnecté. Test : `docker run --rm --network traefik_proxy curlimages/curl -s -x socks5h://warp:1080 https://www.cloudflare.com/cdn-cgi/trace \| grep warp` doit afficher `warp=on`. Sinon `docker restart warp`. Le conteneur peut rester « Up (unhealthy) » avec un démon WARP mort : Docker ne le relance pas tout seul. |
 | `sf-config.sh` : « aucun flux /playback/ » | URL du manifest incorrecte, StreamFusion injoignable depuis l'hôte, ou film de test sans source : relancer avec un autre identifiant IMDb (`deploy/bin/sf-config.sh <url> tt…`). |
 
 Voir aussi [EXPLOITATION.md](EXPLOITATION.md) et [ARCHITECTURE.md](ARCHITECTURE.md).
