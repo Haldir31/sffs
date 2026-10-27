@@ -2,15 +2,34 @@
 # Intègre sffs et Silo (silosffs) dans une installation SSDV2 existante, puis les installe
 # par le mécanisme SSDV2 standard (launch_service : pretasks -> conteneur -> posttasks -> registre).
 #
-#   ssd/install.sh            installe (ou met à jour la définition de) sffs puis silosffs
-#   ssd/install.sh --files    copie seulement les fichiers d'application, sans rien lancer
+#   ssd/install.sh [options]          installe sffs puis silosffs
+#   ssd/install.sh --files            copie seulement les définitions d'applications
 #
-# Prérequis : StreamFusion installé par SSDV2 (conteneurs stream-fusion et stremio-postgres).
+# Options (toutes facultatives ; sans elles, les questions sont posées pendant l'installation) :
+#   --manifest <url>      URL du manifest de l'addon StreamFusion (…/manifest.json)
+#   --subdomain <nom>     sous-domaine de Silo (défaut demandé ; l'API Jellyfin est sur <nom>-jf)
+#   --auth <type>         authentification Traefik de Silo : aucune conseillé (Silo a ses comptes)
+#   --only sffs|silo      n'installer qu'une des deux applications
+#
+# La clé TMDB est reprise de StreamFusion. Prérequis : StreamFusion installé par SSDV2.
 # Ne modifie aucun fichier suivi par git dans SSDV2 : les mises à jour (git pull) restent possibles.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(dirname "$HERE")
 . "$HERE/lib.sh"
+
+FILES_ONLY=0 MANIFEST="" SUB="" AUTH="" ONLY=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --files) FILES_ONLY=1 ;;
+    --manifest) MANIFEST=$2; shift ;;
+    --subdomain) SUB=$2; shift ;;
+    --auth) AUTH=$2; shift ;;
+    --only) ONLY=$2; shift ;;
+    *) echo "option inconnue : $1" >&2; exit 2 ;;
+  esac
+  shift
+done
 
 ok()   { printf '  \033[32mOK\033[0m %s\n' "$*"; }
 fail() { printf '  \033[31mERREUR\033[0m %s\n' "$*" >&2; exit 1; }
@@ -21,10 +40,15 @@ docker info >/dev/null 2>&1 || fail "docker inaccessible pour $USER (groupe dock
 ok "docker"
 [ -e /dev/fuse ] || fail "/dev/fuse absent (modprobe fuse)"
 ok "/dev/fuse"
-for c in stremio-postgres stream-fusion; do
-  [ "$(docker inspect -f '{{.State.Running}}' "$c" 2>/dev/null)" = true ] || fail "conteneur $c arrêté ou absent : installer StreamFusion avec SSDV2 d'abord"
+running() { [ "$(docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null)" = true ]; }
+running stremio-postgres || fail "conteneur stremio-postgres arrêté ou absent : installer StreamFusion avec SSDV2 d'abord"
+SF=""
+for c in $(docker ps --filter label=ssdv2.app=streamfusion --format '{{.Names}}') stream-fusion streamfusion; do
+  case "$c" in stremio-*|taskiq-*|sftorznab*) continue ;; esac
+  running "$c" && docker inspect -f '{{.Config.Image}}' "$c" | grep -q stream-fusion && { SF=$c; break; }
 done
-ok "StreamFusion (stream-fusion, stremio-postgres)"
+[ -n "$SF" ] || fail "conteneur StreamFusion introuvable (stream-fusion ou streamfusion)"
+ok "StreamFusion : conteneurs $SF et stremio-postgres"
 prop=$(findmnt -no PROPAGATION --target /mnt 2>/dev/null || true)
 case "$prop" in
   shared*) ok "/mnt en propagation partagée" ;;
@@ -32,10 +56,10 @@ case "$prop" in
      echo "  Correctif : sudo mount --make-rshared /   (à rendre permanent, ex. via systemd)"; exit 1 ;;
 esac
 
-echo "== Fichiers d'application"
+echo "== Définitions d'applications"
 mkdir -p "$SETTINGS_STORAGE/vars"
 for app in sffs silosffs; do
-  sed "s|__SFFS_REPO__|$REPO|" "$HERE/vars/$app.yml" > "$SETTINGS_STORAGE/vars/$app.yml"
+  sed -e "s|__SFFS_REPO__|$REPO|" -e "s|__SF_CONTAINER__|$SF|" "$HERE/vars/$app.yml" > "$SETTINGS_STORAGE/vars/$app.yml"
   ok "vars/$app.yml -> $SETTINGS_STORAGE/vars/"
 done
 # Les pretasks/posttasks ne sont cherchées que dans les sources SSDV2 : fichiers non suivis,
@@ -43,23 +67,40 @@ done
 EXCL="$SETTINGS_SOURCE/.git/info/exclude"
 for f in pretasks/sffs.yml pretasks/silosffs.yml posttasks/silosffs.yml; do
   install -m 0644 "$HERE/$f" "$SETTINGS_SOURCE/includes/dockerapps/$f"
-  [ -f "$EXCL" ] && ! grep -qxF "includes/dockerapps/$f" "$EXCL" && echo "includes/dockerapps/$f" >> "$EXCL"
+  if [ -f "$EXCL" ] && ! grep -qxF "includes/dockerapps/$f" "$EXCL"; then echo "includes/dockerapps/$f" >> "$EXCL"; fi
   ok "$f -> $SETTINGS_SOURCE/includes/dockerapps/"
 done
 chmod +x "$REPO/build-images.sh" "$REPO/deploy/bin/sf-config.sh" "$HERE"/*.sh
 
-[ "${1:-}" = --files ] && { echo "Fichiers en place. Installation : $0"; exit 0; }
+[ $FILES_ONLY = 1 ] && { echo "Définitions en place."; exit 0; }
 
-echo "== Installation de sffs (questions : URL du manifest StreamFusion, clé TMDB)"
-ssd_launch sffs || fail "installation de sffs"
-echo "   Chargement du catalogue (1 à 5 min, plus au premier démarrage)…"
-for _ in $(seq 1 120); do mountpoint -q /mnt/sffs && [ -d /mnt/sffs/films ] && break; sleep 10; done
-mountpoint -q /mnt/sffs || fail "/mnt/sffs non monté : docker logs sffs"
-ok "/mnt/sffs monté ($(ls /mnt/sffs/films | wc -l) films)"
+# Valeurs passées aux pretasks sans question (fichier temporaire lu par launch_service).
+EXTRA=$(mktemp); chmod 600 "$EXTRA"; trap 'rm -f "$EXTRA"' EXIT
+TMDB=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$SF" | sed -n 's/^TMDB_API_KEY=//p')
+{
+  [ -n "$TMDB" ] && printf 'streamfusion_tmdb_api_key: "%s"\n' "$TMDB"
+  [ -n "$MANIFEST" ] && printf 'sffs_manifest_url: "%s"\n' "$MANIFEST"
+  true
+} > "$EXTRA"
+export ANSIBLE_EXTRA_VARS_FILE=$EXTRA
+[ -n "$TMDB" ] && ok "clé TMDB reprise de StreamFusion"
 
-echo "== Installation de Silo (questions : sous-domaine, authentification ; choisir 'aucune', Silo a la sienne)"
-echo "   Première fois : construction de l'image, 5 à 15 min."
-ssd_launch silosffs || fail "installation de silosffs"
+if [ "$ONLY" != silo ]; then
+  echo "== Installation de sffs"
+  ssd_launch sffs || fail "installation de sffs"
+  echo "   Chargement du catalogue (1 à 10 min, plus au premier démarrage)…"
+  for _ in $(seq 1 120); do [ -d /mnt/sffs/films ] && break; sleep 10; done
+  [ -d /mnt/sffs/films ] || fail "/mnt/sffs non monté : docker logs sffs"
+  ok "/mnt/sffs monté ($(ls /mnt/sffs/films | wc -l) films)"
+fi
+
+if [ "$ONLY" != sffs ]; then
+  echo "== Installation de Silo (silosffs)"
+  [ -n "$SUB" ] && ssd_account "sub.silosffs.silosffs" "$SUB"
+  [ -n "$AUTH" ] && ssd_account "sub.silosffs.auth" "$AUTH"
+  echo "   Première fois : construction de l'image Silo, 5 à 15 min (plus sur ARM ou petit CPU)."
+  ssd_launch silosffs || fail "installation de silosffs"
+fi
 
 cat <<EOF
 

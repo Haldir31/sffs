@@ -23,7 +23,7 @@
     mode: "0755"
 
 - name: Vérifier que StreamFusion (SSDV2) est installé
-  ansible.builtin.command: docker inspect -f '{% raw %}{{.State.Running}}{% endraw %}' stremio-postgres stream-fusion
+  ansible.builtin.command: docker inspect -f '{% raw %}{{.State.Running}}{% endraw %}' stremio-postgres {{ sffs_sf_container }}
   register: sffs_sf_running
   changed_when: false
   failed_when: sffs_sf_running.rc != 0 or 'false' in sffs_sf_running.stdout
@@ -57,11 +57,19 @@
   when: sffs_known.SF_STREAM_CFG is not defined and (sffs_manifest_url | default('')) == ''
   no_log: true
 
+- name: Adresse locale de StreamFusion (réseau traefik_proxy)
+  ansible.builtin.command: docker inspect -f '{% raw %}{{(index .NetworkSettings.Networks "traefik_proxy").IPAddress}}{% endraw %}' {{ sffs_sf_container }}
+  register: sffs_sf_ip
+  changed_when: false
+  when: sffs_known.SF_STREAM_CFG is not defined
+
 - name: Déduire SF_STREAM_CFG et SF_PLAYBACK_CFG
   ansible.builtin.command:
     argv:
       - "{{ sffs_repo }}/deploy/bin/sf-config.sh"
       - "{{ sffs_manifest_url | default(sffs_manifest_prompt.user_input | default(''), true) | trim }}"
+      - "tt0172495"
+      - "http://{{ sffs_sf_ip.stdout }}:8080"
   register: sffs_cfg_out
   changed_when: false
   when: sffs_known.SF_STREAM_CFG is not defined

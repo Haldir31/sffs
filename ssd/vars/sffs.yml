@@ -9,6 +9,8 @@ traefik_labels_enabled: false
 
 # Dépôt sffs (renseigné par ssd/install.sh) : sert à construire l'image si elle manque.
 sffs_repo: '__SFFS_REPO__'
+# Conteneur StreamFusion (détecté par ssd/install.sh : stream-fusion ou streamfusion selon la version de SSDV2).
+sffs_sf_container: '__SF_CONTAINER__'
 # Réglages (facultatifs) : voir docs/ARCHITECTURE.md.
 sffs_langs: 'fr'
 sffs_per_quality: '5'
@@ -25,7 +27,7 @@ pg_volumes:
 pg_env:
   # Base StreamFusion (conteneur stremio-postgres de SSDV2), rôle en lecture seule créé par la pretask.
   SF_PG_DSN: "postgres://sffs_reader:{{ SFFS_DB_PASS }}@stremio-postgres:5432/streamfusion?sslmode=disable&options=-c%20default_transaction_read_only%3Don"
-  SF_BASE: 'http://stream-fusion:8080'
+  SF_BASE: "http://{{ sffs_sf_container }}:8080"
   SF_STREAM_CFG: "{{ SF_STREAM_CFG }}"
   SF_PLAYBACK_CFG: "{{ SF_PLAYBACK_CFG }}"
   SFFS_MOUNT: '/mnt/sffs'

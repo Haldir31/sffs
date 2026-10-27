@@ -18,3 +18,8 @@ done
 ssd_launch() {
   bash "$SETTINGS_SOURCE/includes/config/scripts/generique.sh" launch_service "$1"
 }
+
+# Écrit une valeur dans account.yml (chiffré) par la fonction SSDV2.
+ssd_account() {
+  bash "$SETTINGS_SOURCE/includes/config/scripts/generique.sh" manage_account_yml "$1" "$2" >/dev/null
+}
