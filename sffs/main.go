@@ -56,6 +56,7 @@ type config struct {
 	langs       []string // langues préférées, dans l'ordre (SFFS_LANGS, défaut fr)
 	perQuality  int      // releases gardées par qualité (SFFS_PER_QUALITY, défaut 5, 0 = toutes)
 	requireHD   bool     // SFFS_REQUIRE_PREFERRED_HD=1 : écarte les films sans version HD dans une langue préférée
+	cachedOnly  bool     // SFFS_CACHED_ONLY=1 : seulement les versions vues en cache (StreamFusion ou sffs)
 
 	series           bool          // SFFS_SERIES=1 : expose aussi les séries sous series/
 	seriesTmdb       []int64       // SFFS_SERIES_TMDB : séries limitées à ces IDs (vide = toutes)
@@ -117,6 +118,7 @@ func loadConfig() config {
 		c.perQuality = n
 	}
 	c.requireHD = os.Getenv("SFFS_REQUIRE_PREFERRED_HD") == "1"
+	c.cachedOnly = os.Getenv("SFFS_CACHED_ONLY") == "1"
 
 	c.series = os.Getenv("SFFS_SERIES") == "1"
 	c.seriesTmdb = parseIDs("SFFS_SERIES_TMDB")
@@ -468,6 +470,17 @@ func bucketOf(resolution, raw string) string {
 // celles déjà en cache, puis les plus seedées. Un REMUX 4K et un REMUX 1080p sont gardés d'office
 // s'il en existe. SD et qualité inconnue seulement à défaut d'autre.
 func selectVersions(vs []*version, cfg config, year, perQuality int) []*version {
+	// Mode « en cache seulement » : versions marquées en cache par StreamFusion (availability) ou
+	// déjà vues en cache par sffs (known). Un titre sans aucune version en cache n'apparaît pas.
+	if cfg.cachedOnly {
+		kept := vs[:0:0]
+		for _, v := range vs {
+			if v.available {
+				kept = append(kept, v)
+			}
+		}
+		vs = kept
+	}
 	if perQuality == 0 {
 		return vs
 	}
@@ -1422,6 +1435,7 @@ func main() {
 		log.Fatal(err)
 	}
 	var fps map[titleKey]titleFP
+	fpWithAvailability = cfg.cachedOnly
 	if wc.every > 0 {
 		if fps, err = allFingerprints(ctx, cfg.dsn); err != nil {
 			log.Fatal(err)

@@ -85,6 +85,7 @@ Clients :
 | Redémarrer sffs | `docker restart sffs` (Silo voit le nouveau montage sans redémarrer) |
 | Journaux | `docker logs -f sffs` · `docker logs -f silo` |
 | Changer un réglage de sffs (langues, quotas…) | copier `vars/sffs.yml` du catalogue dans `<SETTINGS_STORAGE>/vars/`, modifier `sffs_langs`, `sffs_per_quality`…, puis relancer sffs |
+| Ne garder que les versions en cache | `sffs_cached_only: '1'` dans ce même fichier, puis relancer sffs : environ 17 000 films au lieu de 43 000, mais chaque version proposée est déjà en cache chez AllDebrid |
 | Retirer sffs | supprimer l'application sffs : `vars/silo.yml` est retiré, et silo repasse à l'image officielle à sa prochaine relance (sa base est gardée). Le rôle `sffs_reader` reste dans la base StreamFusion (`DROP ROLE sffs_reader`) |
 
 Ne mets pas à jour `silo` vers une image officielle plus récente tant que sffs est installé : la base serait

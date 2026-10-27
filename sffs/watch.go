@@ -82,9 +82,17 @@ type titleFP struct{ n, x int64 }
 const fpFilter = `tmdb_id is not null and coalesce(btrim(info_hash),'') <> ''
 	and (type = 'movie' or (type in ('series','show') and coalesce(tmdb_media_type,'') <> 'movie'))`
 
+// fpWithAvailability : en mode « en cache seulement », l'empreinte tient compte de l'état du cache
+// (availability) : une version qui passe en cache, ou n'y est plus, recharge son titre.
+var fpWithAvailability bool
+
 // fingerprints calcule l'empreinte de tous les titres (ids vide) ou des titres ids.
 func fingerprints(ctx context.Context, conn *pgx.Conn, ids []int64) (map[titleKey]titleFP, error) {
-	q := `select tmdb_id, type <> 'movie', count(*), bit_xor(hashtextextended(lower(btrim(info_hash)), 0))
+	src := `lower(btrim(info_hash))`
+	if fpWithAvailability {
+		src = `lower(btrim(info_hash)) || availability::text`
+	}
+	q := `select tmdb_id, type <> 'movie', count(*), bit_xor(hashtextextended(` + src + `, 0))
 	        from torrent_items where ` + fpFilter
 	args := []any{}
 	if len(ids) > 0 {

@@ -23,3 +23,20 @@ func TestUnplayable(t *testing.T) {
 		}
 	}
 }
+
+func TestCachedOnly(t *testing.T) {
+	vs := []*version{
+		{id: "a", bucket: "1080", available: true, releaseKey: "a"},
+		{id: "b", bucket: "1080", available: false, releaseKey: "b"},
+		{id: "c", bucket: "2160", available: false, releaseKey: "c"},
+	}
+	cfg := config{langs: []string{"fr"}, cachedOnly: true}
+	got := selectVersions(vs, cfg, 0, 5)
+	if len(got) != 1 || got[0].id != "a" {
+		t.Fatalf("en cache seulement : %d versions, attendu la seule version en cache", len(got))
+	}
+	cfg.cachedOnly = false
+	if got := selectVersions(vs, cfg, 0, 5); len(got) != 3 {
+		t.Fatalf("mode normal : %d versions, attendu 3", len(got))
+	}
+}

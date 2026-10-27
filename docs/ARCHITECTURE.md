@@ -65,6 +65,7 @@
 | `SFFS_TMDB` | Limiter aux films listés (IDs TMDB, tests) | tous |
 | `SFFS_SERIES` | Exposer aussi les séries | `0` |
 | `SFFS_SERIES_PER_QUALITY` | Versions par qualité et par épisode | `2` |
+| `SFFS_CACHED_ONLY` | `1` : seulement les versions vues en cache chez le débrideur (colonne `availability` de StreamFusion, ou torrents déjà vus en cache par sffs) ; un titre sans version en cache n'apparaît pas. L'état du cache entre dans l'empreinte de la surveillance : une version qui passe en cache fait apparaître son titre | `0` |
 | `SFFS_SERIES_TMDB` | Limiter aux séries listées | toutes |
 | `SFFS_TMDB_KEY` | Clé API TMDB (obligatoire avec les séries) | |
 | `SFFS_TMDB_CACHE` | Cache disque des réponses TMDB | |
