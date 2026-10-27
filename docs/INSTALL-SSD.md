@@ -1,5 +1,7 @@
 # Installation dans SSDV2
 
+*English: [en/INSTALL-SSD.md](en/INSTALL-SSD.md)*
+
 Deux applications du catalogue SSDV2 :
 
 | Application | Rôle |
@@ -44,7 +46,7 @@ En attendant leur intégration à SSDV2, ces applications sont dans la branche `
 6. **Écrit `vars/silo.yml`** (image modifiée). Un `vars/silo.yml` personnel est gardé en `silo.yml.avant-sffs`
    et sert de base.
 7. **Démarre sffs**, puis **installe ou redéploie `silo`** par SSDV2 (sa pretask : base, Redis, Meilisearch,
-   GPU ; sa posttask : DNS).
+   GPU ; sa posttask : DNS, compte admin).
 8. Crée la **clé d'API Silo de sffs** dès qu'un compte admin existe. sffs la relit sans redémarrer et demande
    alors à Silo un scan ciblé de chaque dossier modifié dans StreamFusion.
 
@@ -64,14 +66,17 @@ Secrets : `<SETTINGS_STORAGE>/docker/<user>/sffs-secrets/` (droits 0600), géné
 1. Installe l'application **sffs** depuis SSDV2. Si Silo n'est pas installé, elle demande son sous-domaine
    (l'authentification Traefik de Silo est réglée sur `aucune` : Silo gère ses comptes, et les applications
    Jellyfin ne savent pas passer une authentification Traefik).
-2. Ouvre Silo et **crée le compte admin** (si Silo est nouveau).
-3. Ajoute deux bibliothèques :
-   - **Films**, type films, dossier `/mnt/sffs/films`
-   - **Séries**, type séries, dossier `/mnt/sffs/series`
+2. **Compte admin** : un Silo nouveau le reçoit automatiquement, avec l'identifiant et le mot de passe de
+   SSDV2 (comme les autres applications du catalogue). Si le mot de passe SSDV2 fait moins de 8 caractères
+   (minimum de Silo), crée le compte dans l'interface web, puis relance l'application sffs.
+3. **Bibliothèques** : sffs crée lui-même **Films** (`/mnt/sffs/films`) et **Séries** (`/mnt/sffs/series`),
+   métadonnées en français, dès que sa clé d'API Silo existe et que `/mnt/sffs` est monté (1 à 20 minutes
+   après l'installation selon le cache TMDB). Une seule fois : une bibliothèque supprimée n'est pas recréée.
 
    Le premier scan dure plusieurs heures pour tout le catalogue. Rien n'est téléchargé pendant le scan.
-4. Une fois le premier scan terminé, **relance l'application sffs** : la clé d'API Silo est créée, et les
-   nouveautés StreamFusion apparaissent ensuite dans Silo en quelques minutes.
+   Évite de redémarrer sffs pendant ce scan : Silo verrait les dossiers disparaître une minute, les marquerait
+   injoignables et le scan échouerait (sans rien supprimer). Il suffit alors de relancer le scan.
+4. Les nouveautés StreamFusion apparaissent ensuite dans Silo en quelques minutes.
 
 Clients :
 - **Navigateur :** `https://<sous-domaine>.<domaine>`
@@ -93,6 +98,8 @@ jour sur place, et Silo voit les changements à son prochain scan.
 | `sffs_repo`, `sffs_repo_version` | ce dépôt, `main` | Sources de sffs et des patchs Silo |
 | `sffs_registry` | `ghcr.io/haldir31` | Registre des images ; vide : construction sur le serveur |
 | `sffs_build_local` | `false` | `true` : toujours construire les images sur le serveur |
+| `sffs_alldebrid_key` | | Clé AllDebrid, si decypharr n'est pas installé et qu'on ne veut pas de question |
+| `sffs_debrid_proxy_override` | proxy de StreamFusion | Proxy des lectures chez AllDebrid ; `''` pour aucun |
 
 Toujours appliqué, sans option : au moins un REMUX 2160p et un REMUX 1080p quand il en existe, et jamais de
 CAM, screener, 3D ni d'image disque (ISO, BDMV, COMPLETE/Full BluRay…), que Silo ne sait pas lire.
@@ -135,5 +142,6 @@ migrée plus loin que l'image modifiée. Les mises à jour de Silo passent par s
 | sffs refuse toutes les lectures (`refus open … processus non autorisé` dans les journaux) | `pid: host` manquant : sffs ne voit pas quel programme lit. Vérifier `docker inspect -f '{{.HostConfig.PidMode}}' sffs`. |
 | Aucune version en cache (`cache movie/… : 30 sources, 0 en cache` dans `docker logs sffs`), StreamFusion journalise `NO_SERVER` | AllDebrid refuse l'adresse du serveur : le proxy `warp` est déconnecté. Test : `docker run --rm --network traefik_proxy curlimages/curl -s -x socks5h://warp:1080 https://www.cloudflare.com/cdn-cgi/trace \| grep warp` doit afficher `warp=on`. Sinon `docker restart warp`. Le conteneur peut rester « Up (unhealthy) » avec un démon WARP mort : Docker ne le relance pas tout seul. |
 | Les nouveautés StreamFusion n'arrivent pas dans Silo | Pas de clé d'API : relancer l'application sffs après avoir créé le compte admin (`sffs-secrets/SFFS_SILO_KEY` doit exister). |
+| Bibliothèque marquée injoignable (`dead_root`), scan en erreur | sffs a redémarré pendant un scan. Rien n'est supprimé : relancer le scan de la bibliothèque une fois `/mnt/sffs` monté. |
 
 Voir aussi [EXPLOITATION.md](EXPLOITATION.md) et [ARCHITECTURE.md](ARCHITECTURE.md).

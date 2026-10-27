@@ -1,5 +1,7 @@
 # Fonctionnement
 
+*English: [en/ARCHITECTURE.md](en/ARCHITECTURE.md)*
+
 ## Vue d'ensemble
 
 1. **Chargement.** Au démarrage, sffs lit les sources de films et de séries dans la table `torrent_items`
@@ -27,6 +29,9 @@
    StreamFusion, recharge seulement les titres concernés et met à jour l'arborescence **sans démonter**. Il
    repère les lignes par leur numéro de transaction Postgres (`xmin`), pas par `updated_at` : les torrents
    reçus par la synchronisation de StreamFusion gardent la date de leur source et ne seraient jamais vus.
+   Les tâches de fond de StreamFusion (correspondance TMDB/IMDb) réécrivent des dizaines de milliers de
+   lignes sans en changer les sources : sffs garde donc une empreinte des sources de chaque titre (nombre et
+   XOR des hachages des `info_hash`, calculés par Postgres) et ne recharge que les titres dont l'empreinte change.
    Il demande ensuite à Silo un scan limité aux dossiers modifiés (`POST /api/v2/scan` avec `path`).
    Un rechargement complet a lieu toutes les `SFFS_RELOAD` (24 h) par sécurité.
 8. **Bibliothèques Silo** (`SFFS_SILO_LIBRARIES=1`, application SSDV2) : dès que la clé d'API Silo existe,
@@ -35,7 +40,9 @@
 
 ## Sélection des versions
 
-1. **Écartés :** doublons (même torrent proposé par plusieurs indexeurs), CAM, TS, TC, screener, R5, 3D.
+1. **Écartés :** doublons (même torrent proposé par plusieurs indexeurs), CAM, TS, TC, screener, R5, 3D, et
+   images disque (ISO, BDMV, COMPLETE/Full BluRay, BD25/50/66/100, M2TS), que Silo ne sait pas lire.
+   Avec `SFFS_CACHED_ONLY=1`, les versions qui ne sont pas vues en cache.
    Pour un film, une version dont l'année s'écarte de plus d'un an de celle du film est aussi écartée.
 2. **Langue d'abord.** Seule la meilleure langue de `SFFS_LANGS` présente pour ce titre est gardée. Elle est
    détectée dans le nom (FRENCH, TRUEFRENCH, VFF, VFQ, VFI, VF2, MULTI…) ou dans les langues relevées par
@@ -70,6 +77,7 @@
 | `SFFS_TMDB_KEY` | Clé API TMDB (obligatoire avec les séries) | |
 | `SFFS_TMDB_CACHE` | Cache disque des réponses TMDB | |
 | `SFFS_KNOWN_CACHE` | Sources déjà vues en cache | `$HOME/silo-test/run/known-cached.json` |
+| `SFFS_DEBRID_PROXY` | Proxy des lectures chez le débrideur, ex. `socks5://warp:1080` (le même que StreamFusion) : AllDebrid refuse les adresses de datacenter | aucun |
 | `SFFS_WATCH` | Intervalle de détection des nouveautés (`0` = désactivé) | `1m` |
 | `SFFS_RELOAD` | Rechargement complet (`0` = jamais) | `24h` |
 | `SFFS_SILO_URL`, `SFFS_SILO_KEY` | API Silo pour les scans ciblés (vide = désactivé) | |

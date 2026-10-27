@@ -1,5 +1,7 @@
 # Installation avec Docker Compose (sans SSDV2)
 
+*English: [en/INSTALL-DOCKER.md](en/INSTALL-DOCKER.md)*
+
 ## Prérequis
 
 - **Docker** 23 ou plus récent (BuildKit), avec Docker Compose v2.

@@ -1,5 +1,7 @@
 # Installation avec Podman rootless (sans Docker)
 
+*English: [en/INSTALL-PODMAN.md](en/INSTALL-PODMAN.md)*
+
 Pour un serveur sans Docker ni droits root, par exemple une seedbox mutualisée. sffs tourne directement sur
 l'hôte, et Silo, sa base et Redis tournent dans un pod podman. Scripts : `deploy/bin/`.
 

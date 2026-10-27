@@ -1,5 +1,7 @@
 # sffs : StreamFusion comme bibliothèque Silo
 
+*English: [README.en.md](README.en.md)*
+
 `sffs` est un système de fichiers virtuel (FUSE, lecture seule) qui présente le catalogue d'une instance
 **StreamFusion Reborn** comme une bibliothèque de films et de séries pour **Silo**, sans rien stocker sur
 disque. La vidéo n'est lue chez **AllDebrid** qu'au moment où quelqu'un lance une lecture.
@@ -40,7 +42,8 @@ Côté ressources :
 | `build-images.sh` | Construit les images `localhost/sffs` et `localhost/silo-sffs` (Docker ou Podman) |
 | `docker/` | `compose.yml` pour Docker sans SSDV2 |
 | `deploy/` | Scripts et modèles de configuration pour Podman rootless |
-| `docs/` | Guides d'installation, [fonctionnement](docs/ARCHITECTURE.md), [exploitation et dépannage](docs/EXPLOITATION.md) |
+| `.github/workflows/` | Construction et publication des images sur `ghcr.io/haldir31` (amd64, arm64) ; vérification hebdomadaire que les patchs s'appliquent sur Silo `main` |
+| `docs/` | Documentation en français ; `docs/en/` : en anglais. Guides d'installation, [fonctionnement](docs/ARCHITECTURE.md), [exploitation et dépannage](docs/EXPLOITATION.md) |
 
 ## Licence
 
