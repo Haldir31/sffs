@@ -1,4 +1,5 @@
-# Construit et publie les images sffs et Silo modifié (amd64 + arm64) sur ghcr.io.
+# Construit et publie les images sffs et Silo modifié (amd64 + arm64) sur ghcr.io, après les tests
+# (tests.yml) : une régression n'est jamais publiée.
 # L'application sffs de SSDV2 les télécharge au lieu de les construire, quand leur étiquette
 # sffs.tree correspond aux sources qu'elle a clonées.
 name: images
@@ -6,7 +7,7 @@ name: images
 on:
   push:
     branches: [main]
-    paths: ['sffs/**', 'silo/**', 'build-images.sh', '.github/workflows/images.yml']
+    paths: ['sffs/**', 'silo/**', 'build-images.sh', '.github/workflows/images.yml', '.github/workflows/tests.yml']
   workflow_dispatch:
 
 permissions:
@@ -17,7 +18,11 @@ env:
   REGISTRY: ghcr.io/${{ github.repository_owner }}
 
 jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml
+
   build:
+    needs: tests
     strategy:
       matrix:
         include:
