@@ -19,7 +19,7 @@ services:
     stop_grace_period: 30s
     env_file: .env
     environment:
-      SFFS_MOUNT: /mnt/sffs
+      SFFS_MOUNT: /mnt/sffs/sf
       SFFS_ALLOW_OTHER: "1"
       SFFS_ALLOW_COMM: "^(silo|ffmpeg|ffprobe)$"
       SFFS_SILO_URL: http://silo:8080
@@ -52,7 +52,8 @@ services:
       GOMAXPROCS: ${SILO_GOMAXPROCS:-8}
       TZ: ${TZ:-Europe/Paris}
     volumes:
-      - ${SFFS_HOST_MOUNT:-/mnt/sffs}:/mnt/sf:ro,rslave
+      # Dossier parent (sffs monte dans son sous-dossier sf) : Silo voit chaque nouveau montage.
+      - ${SFFS_HOST_MOUNT:-/mnt/sffs}:/mnt:ro,rslave
       - ./data/silo/plugins:/var/lib/silo/plugins
       - ./data/silo/artwork:/var/lib/silo/artwork
       - ./data/silo/compat:/var/lib/silo/compat

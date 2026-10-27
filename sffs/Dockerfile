@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends fuse3 ca-certif
 COPY --from=build /sffs /usr/local/bin/sffs
 # Caches persistants (TMDB, sources déjà vues en cache).
 ENV SFFS_TMDB_CACHE=/config/tmdb-tv.json SFFS_KNOWN_CACHE=/config/known-cached.json \
-    SFFS_MOUNT=/mnt/sffs GOMAXPROCS=4
+    SFFS_MOUNT=/mnt/sffs/sf GOMAXPROCS=4
 VOLUME /config
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 # sffs démonte proprement à l'arrêt (SIGTERM) ; l'entrée nettoie un montage resté bloqué

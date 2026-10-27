@@ -5,7 +5,7 @@
 disque. La vidéo n'est lue chez **AllDebrid** qu'au moment où quelqu'un lance une lecture.
 
 ```
-StreamFusion ──base Postgres (lecture seule)──▶ sffs ──FUSE──▶ /mnt/sffs/{films,series}
+StreamFusion ──base Postgres (lecture seule)──▶ sffs ──FUSE──▶ /mnt/sffs/sf/{films,series}
      ▲                                            │                      │ (lecture seule)
      └──── /playback (lien AllDebrid) ◀───────────┘ à la lecture         ▼
                                                      Silo modifié (+ PostgreSQL pgvector + Redis)

@@ -13,7 +13,7 @@ HASH=$(printf %s "$KEY" | sha256sum | cut -d' ' -f1)
 docker exec db-silosffs psql -U silo -d silo -qAtc \
   "insert into api_keys(user_id,label,key_hash,key_prefix,scopes) select (select id from users where role = 'admin' and enabled order by id limit 1),'sffs','$HASH','${KEY:0:11}','{}'"
 umask 077; printf '%s\n' "$KEY" > "$SECRETS/SFFS_SILO_KEY"
-# Redéployer sffs démonte /mnt/sffs une minute : on attend la fin des scans Silo en cours
+# Redéployer sffs démonte /mnt/sffs/sf une minute : on attend la fin des scans Silo en cours
 # (le premier scan complet prend plusieurs heures), sinon Silo verrait des fichiers disparaître.
 active() { docker exec db-silosffs psql -U silo -d silo -qAtc \
   "select count(*) from scan_runs where status in ('accepted','running')"; }

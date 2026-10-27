@@ -732,6 +732,22 @@ func (r *resolver) playbackURL(v *version) string {
 	return r.cfg.base + "/playback/" + r.cfg.playbackCfg + "/" + url.PathEscape(base64.StdEncoding.EncodeToString(b))
 }
 
+// dataTransport lit les octets chez le débrideur. SFFS_DEBRID_PROXY (ex. socks5://warp:1080) y
+// fait passer les téléchargements : AllDebrid refuse (503) les adresses de datacenter, et le lien
+// doit être lu depuis la même sortie que celle qui l'a débloqué (StreamFusion via WARP).
+func dataTransport() *http.Transport {
+	t := &http.Transport{MaxIdleConnsPerHost: 8, ResponseHeaderTimeout: 60 * time.Second}
+	if p := os.Getenv("SFFS_DEBRID_PROXY"); p != "" {
+		u, err := url.Parse(p)
+		if err != nil || u.Host == "" {
+			log.Fatalf("SFFS_DEBRID_PROXY invalide : %q", p)
+		}
+		t.Proxy = http.ProxyURL(u)
+		log.Printf("téléchargements via le proxy %s", u.Redacted())
+	}
+	return t
+}
+
 // resolve renvoie l'URL directe du débrideur pour une version (cache 2 h).
 func (r *resolver) resolve(ctx context.Context, v *version, fresh bool) (string, error) {
 	r.mu.Lock()
@@ -1414,7 +1430,7 @@ func main() {
 	st := &state{
 		cfg:   cfg,
 		res:   newResolver(cfg),
-		data:  &http.Client{Transport: &http.Transport{MaxIdleConnsPerHost: 8, ResponseHeaderTimeout: 60 * time.Second}},
+		data:  &http.Client{Transport: dataTransport()},
 		armed: map[string]time.Time{},
 	}
 	root := &rootNode{st: st, movies: movies, shows: shows}

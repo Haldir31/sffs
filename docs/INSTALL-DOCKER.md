@@ -49,8 +49,8 @@ Renseigne :
 
 ```bash
 docker compose -f docker/compose.yml up -d
-docker logs -f sffs        # attendre « monté sur /mnt/sffs »
-ls /mnt/sffs/films | head
+docker logs -f sffs        # attendre « monté sur /mnt/sffs/sf »
+ls /mnt/sffs/sf/films | head
 ```
 
 ### 5. Premier réglage de Silo

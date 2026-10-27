@@ -50,6 +50,19 @@
 # Sans URL de manifest (sffs_manifest_url / --manifest), la configuration est générée :
 # clé d'API StreamFusion dédiée "sffs", clé AllDebrid reprise de decypharr (ou demandée).
 
+# AllDebrid refuse (503) les téléchargements depuis une adresse de datacenter : sffs lit les
+# fichiers par le même proxy que StreamFusion (en général socks5://warp:1080).
+- name: Proxy de StreamFusion (PROXY_URL)
+  ansible.builtin.shell: >-
+    docker inspect -f '{% raw %}{{range .Config.Env}}{{println .}}{{end}}{% endraw %}' {{ sffs_sf_container }}
+    | sed -n 's/^PROXY_URL=//p'
+  register: sffs_sf_proxy
+  changed_when: false
+
+- name: Proxy des téléchargements de sffs
+  ansible.builtin.set_fact:
+    sffs_debrid_proxy: "{{ sffs_debrid_proxy_override | default(sffs_sf_proxy.stdout | trim) }}"
+
 - name: Adresse locale de StreamFusion (réseau traefik_proxy)
   ansible.builtin.command: docker inspect -f '{% raw %}{{(index .NetworkSettings.Networks "traefik_proxy").IPAddress}}{% endraw %}' {{ sffs_sf_container }}
   register: sffs_sf_ip

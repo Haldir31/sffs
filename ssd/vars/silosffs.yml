@@ -17,8 +17,9 @@ pg_volumes:
   - "{{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/compat:/var/lib/silo/compat"
   - "{{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/transcode:/tmp/silo-transcode"
   - "{{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/download-artifacts:/tmp/silo-download-artifacts"
-  # Bibliothèque virtuelle sffs. rslave : un redémarrage de sffs est vu sans redémarrer Silo.
-  - '/mnt/sffs:/mnt/sf:ro,rslave'
+  # Bibliothèque virtuelle sffs (montée sur /mnt/sffs/sf de l'hôte, donc /mnt/sf ici). On monte le
+  # dossier parent en rslave : un redémarrage de sffs est vu sans redémarrer Silo.
+  - '/mnt/sffs:/mnt:ro,rslave'
   - '/etc/localtime:/etc/localtime:ro'
 
 pg_env:

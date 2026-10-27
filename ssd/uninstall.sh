@@ -7,5 +7,5 @@ set -euo pipefail
 for app in silosffs sffs; do
   bash "$SETTINGS_SOURCE/includes/config/scripts/generique.sh" suppression_appli "$app" 0 || true   # 0 = garder les données
 done
-mountpoint -q /mnt/sffs && sudo umount -l /mnt/sffs || true
+for m in /mnt/sffs/sf /mnt/sffs; do mountpoint -q "$m" && sudo umount -l "$m"; done; true
 echo "Désinstallé (SSDV2 a aussi retiré vars/sffs.yml et vars/silosffs.yml ; ssd/install.sh les remet)."

@@ -5,7 +5,7 @@ sffs et Silo s'installent comme deux applications SSDV2, par le même mécanisme
 
 | Application | Conteneurs | Rôle |
 |---|---|---|
-| `sffs` | `sffs` | Système de fichiers virtuel. Monte `/mnt/sffs` sur l'hôte, comme decypharr monte `/mnt/decypharr`. Pas de route Traefik. |
+| `sffs` | `sffs` | Système de fichiers virtuel. Monte `/mnt/sffs/sf` sur l'hôte, comme decypharr monte `/mnt/decypharr`. Pas de route Traefik. |
 | `silosffs` | `silosffs`, `db-silosffs` (PostgreSQL 18 + pgvector), `redis-silosffs` | Silo modifié, avec deux routes Traefik : `https://<sous-domaine>.<domaine>` (web) et `https://<sous-domaine>-jf.<domaine>` (applications Jellyfin) |
 
 Ce que fait l'installation :
@@ -76,7 +76,7 @@ Le script :
 2. **Dépose les définitions** d'applications dans SSDV2 : `vars/` dans `<SETTINGS_STORAGE>/vars/`, `pretasks/`
    et `posttasks/` dans les sources SSDV2.
 3. **Installe sffs.** Il génère la configuration StreamFusion (étape 2), crée le rôle `sffs_reader`, construit
-   l'image (1 à 2 min) et démarre le conteneur. Il attend ensuite que `/mnt/sffs` soit monté. Au premier démarrage,
+   l'image (1 à 2 min) et démarre le conteneur. Il attend ensuite que `/mnt/sffs/sf` soit monté. Au premier démarrage,
    sffs interroge TMDB pour toutes les séries, ce qui prend 10 à 20 minutes.
 4. **Installe silosffs.** Il demande le **sous-domaine** et l'**authentification** : choisis `aucune`, car Silo
    gère ses propres comptes et ses applications ne passent pas une authentification Traefik. Il construit ensuite
@@ -96,7 +96,7 @@ Le script :
    ssd/silo-key.sh
    ```
    Le script crée une clé d'API Silo pour sffs et l'enregistre dans les secrets. Il redéploie ensuite sffs,
-   mais seulement **après la fin des scans Silo en cours** (le redéploiement démonte `/mnt/sffs` une minute).
+   mais seulement **après la fin des scans Silo en cours** (le redéploiement démonte `/mnt/sffs/sf` une minute).
    Pendant le premier scan, lance-le donc en arrière-plan :
    `setsid nohup ssd/silo-key.sh > ~/sffs-silo-key.log 2>&1 &`
 
@@ -122,7 +122,7 @@ pour remettre les définitions.
 
 | Symptôme | Cause et solution |
 |---|---|
-| `/mnt/sffs` vide dans Silo alors qu'il est rempli sur l'hôte | Propagation : `/mnt` doit être `shared` sur l'hôte. Silo monte `/mnt/sffs` en `rslave`. |
+| `/mnt/sf` vide ou « Transport endpoint is not connected » dans Silo alors que `/mnt/sffs/sf` est rempli sur l'hôte | Propagation : `/mnt` doit être `shared` sur l'hôte. Silo monte le dossier parent `/mnt/sffs` en `rslave` (jamais `/mnt/sffs/sf` lui-même, qui figerait un montage mort après un redémarrage de sffs). Ancienne installation : `ssd/update.sh sffs` migre. |
 | `Transport endpoint is not connected` sur l'hôte | sffs arrêté brutalement : `docker restart sffs` (le conteneur nettoie le montage mort au démarrage). |
 | sffs refuse toutes les lectures (`refus open … processus non autorisé` dans les journaux) | `pid: host` manquant : sffs ne voit pas quel programme lit. Vérifier `docker inspect -f '{{.HostConfig.PidMode}}' sffs`. |
 | Aucune version en cache (`cache movie/… : 30 sources, 0 en cache` dans `docker logs sffs`), StreamFusion journalise `NO_SERVER` | AllDebrid refuse l'adresse du serveur : le proxy `warp` est déconnecté. Test : `docker run --rm --network traefik_proxy curlimages/curl -s -x socks5h://warp:1080 https://www.cloudflare.com/cdn-cgi/trace \| grep warp` doit afficher `warp=on`. Sinon `docker restart warp`. Le conteneur peut rester « Up (unhealthy) » avec un démon WARP mort : Docker ne le relance pas tout seul. |

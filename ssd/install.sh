@@ -90,9 +90,9 @@ if [ "$ONLY" != silo ]; then
   echo "== Installation de sffs"
   ssd_launch sffs || fail "installation de sffs"
   echo "   Chargement du catalogue (1 à 5 min ; 15 à 30 min au premier démarrage, le temps de remplir le cache TMDB)…"
-  for _ in $(seq 1 240); do [ -d /mnt/sffs/films ] && break; sleep 10; done
-  [ -d /mnt/sffs/films ] || fail "/mnt/sffs non monté : docker logs sffs"
-  ok "/mnt/sffs monté ($(ls /mnt/sffs/films | wc -l) films)"
+  for _ in $(seq 1 240); do [ -d /mnt/sffs/sf/films ] && break; sleep 10; done
+  [ -d /mnt/sffs/sf/films ] || fail "/mnt/sffs/sf non monté : docker logs sffs"
+  ok "/mnt/sffs/sf monté ($(ls /mnt/sffs/sf/films | wc -l) films)"
 fi
 
 if [ "$ONLY" != sffs ]; then

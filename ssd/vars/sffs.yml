@@ -1,6 +1,6 @@
 ---
 # sffs pour SSDV2 : StreamFusion exposé comme bibliothèque de fichiers virtuels (FUSE) sur
-# l'hôte, dans /mnt/sffs, lue par Silo (application silosffs).
+# l'hôte, dans /mnt/sffs/sf, lue par Silo (application silosffs).
 # Installé par ssd/install.sh (copié dans <SETTINGS_STORAGE>/vars/, chemin du dépôt renseigné).
 pgrole: 'sffs'
 image: 'localhost/sffs:latest'
@@ -30,7 +30,9 @@ pg_env:
   SF_BASE: "http://{{ sffs_sf_container }}:8080"
   SF_STREAM_CFG: "{{ SF_STREAM_CFG }}"
   SF_PLAYBACK_CFG: "{{ SF_PLAYBACK_CFG }}"
-  SFFS_MOUNT: '/mnt/sffs'
+  # /mnt/sffs reste un dossier ordinaire : Silo le monte en entier (rslave) et voit ainsi chaque
+  # nouveau montage sffs, même après un redémarrage de sffs.
+  SFFS_MOUNT: '/mnt/sffs/sf'
   SFFS_ALLOW_OTHER: '1'
   SFFS_ALLOW_COMM: '^(silo|ffmpeg|ffprobe)$'
   SFFS_LANGS: "{{ sffs_langs }}"
@@ -39,6 +41,9 @@ pg_env:
   SFFS_SERIES: "{{ sffs_series }}"
   SFFS_SERIES_PER_QUALITY: "{{ sffs_series_per_quality }}"
   SFFS_TMDB_KEY: "{{ SFFS_TMDB_KEY }}"
+  # Téléchargements chez AllDebrid via le proxy de StreamFusion (WARP) ; vide = connexion directe.
+  # Forcer une valeur : sffs_debrid_proxy_override: 'socks5://…' (ou '' pour désactiver).
+  SFFS_DEBRID_PROXY: "{{ sffs_debrid_proxy | default('') }}"
   SFFS_WATCH: '1m'
   SFFS_RELOAD: '24h'
   # Scans ciblés de Silo (clé créée après le premier démarrage de Silo : ssd/silo-key.sh).
