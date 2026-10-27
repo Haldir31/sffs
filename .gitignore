@@ -4,3 +4,5 @@
 sffs/sffs
 *.log
 run/
+docker/.env
+docker/data/

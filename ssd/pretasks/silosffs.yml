@@ -1,0 +1,124 @@
+---
+# Pretask SSDV2 de silosffs : secrets, image, base Postgres (pgvector) et Redis compagnons.
+
+- name: Dossiers de Silo
+  ansible.builtin.set_fact:
+    silo_dir: "{{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}"
+    silo_secret_dir: "{{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}-secrets"
+
+- name: Créer les dossiers de Silo
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ silo_dir }}/plugins"
+    - "{{ silo_dir }}/artwork"
+    - "{{ silo_dir }}/compat"
+    - "{{ silo_dir }}/transcode"
+    - "{{ silo_dir }}/download-artifacts"
+    - "{{ silo_dir }}/db-{{ pgrole }}"
+
+- name: Créer le dossier des secrets
+  ansible.builtin.file:
+    path: "{{ silo_secret_dir }}"
+    state: directory
+    mode: "0700"
+
+- name: Générer les secrets persistants (une seule fois)
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      umask 077
+      f="{{ silo_secret_dir }}/{{ item }}"
+      [ -s "$f" ] || openssl rand -hex 32 > "$f"
+    executable: /bin/bash
+  loop: [SILO_SECRET_KEY, SILO_DB_PASS]
+  changed_when: false
+  no_log: true
+
+- name: Lire les secrets
+  ansible.builtin.slurp:
+    src: "{{ silo_secret_dir }}/{{ item }}"
+  loop: [SILO_SECRET_KEY, SILO_DB_PASS]
+  register: silo_secret_files
+  no_log: true
+
+- name: Exposer les secrets au déploiement
+  ansible.builtin.set_fact:
+    SILO_SECRET_KEY: "{{ (silo_secret_files.results | selectattr('item', 'equalto', 'SILO_SECRET_KEY') | first).content | b64decode | trim }}"
+    SILO_DB_PASS: "{{ (silo_secret_files.results | selectattr('item', 'equalto', 'SILO_DB_PASS') | first).content | b64decode | trim }}"
+  no_log: true
+
+# --- Image (Silo officiel + patchs sffs) --------------------------------------------------
+
+- name: L'image Silo existe-t-elle ?
+  ansible.builtin.command: docker image inspect localhost/silo-sffs:latest
+  register: silo_image
+  changed_when: false
+  failed_when: false
+
+- name: Construire l'image Silo (5 à 15 min)
+  ansible.builtin.command:
+    argv: ["{{ sffs_repo }}/build-images.sh", "silo"]
+  environment:
+    CONTAINER_ENGINE: docker
+    SILO_IMAGE: localhost/silo-sffs:latest
+    SILO_SRC: "{{ silo_dir }}/src"
+  when: silo_image.rc != 0 or (silo_rebuild | default(false) | bool)
+
+# --- Compagnons ---------------------------------------------------------------------------
+
+- name: Déployer db-{{ pgrole }} (PostgreSQL 18 + pgvector)
+  community.docker.docker_container:
+    name: "db-{{ pgrole }}"
+    image: pgvector/pgvector:pg18
+    pull: true
+    state: started
+    restart_policy: unless-stopped
+    labels:
+      ssdv2.app: "{{ pgrole }}"
+    shm_size: 256M
+    env:
+      POSTGRES_USER: silo
+      POSTGRES_PASSWORD: "{{ SILO_DB_PASS }}"
+      POSTGRES_DB: silo
+    command:
+      - postgres
+      - -c
+      - max_connections=50
+      - -c
+      - shared_buffers=256MB
+    volumes:
+      - "{{ silo_dir }}/db-{{ pgrole }}:/var/lib/postgresql"
+    networks:
+      - name: traefik_proxy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U silo -d silo"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  no_log: true
+
+- name: Déployer redis-{{ pgrole }}
+  community.docker.docker_container:
+    name: "redis-{{ pgrole }}"
+    image: redis:alpine
+    pull: true
+    state: started
+    restart_policy: unless-stopped
+    labels:
+      ssdv2.app: "{{ pgrole }}"
+    command: ["redis-server", "--io-threads", "1"]
+    volumes:
+      - "{{ silo_dir }}/redis:/data"
+    networks:
+      - name: traefik_proxy
+
+- name: Attendre que la base soit prête
+  ansible.builtin.command: docker inspect -f '{% raw %}{{.State.Health.Status}}{% endraw %}' "db-{{ pgrole }}"
+  register: silo_db_health
+  until: silo_db_health.stdout == 'healthy'
+  retries: 30
+  delay: 5
+  changed_when: false

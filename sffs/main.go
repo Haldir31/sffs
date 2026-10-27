@@ -1433,6 +1433,10 @@ func main() {
 			SyncRead:     true, // lectures dans l'ordre : un seul flux HTTP par ouverture
 			MaxReadAhead: 1 << 20,
 			MaxWrite:     1 << 20,
+			// SFFS_ALLOW_OTHER=1 : fichiers lisibles par les autres utilisateurs (ex. Silo lancé sous
+			// un autre UID dans Docker). Pour un utilisateur non root, demande user_allow_other
+			// dans /etc/fuse.conf.
+			AllowOther: os.Getenv("SFFS_ALLOW_OTHER") == "1",
 		},
 		EntryTimeout: &sec,
 		AttrTimeout:  &sec,

@@ -52,6 +52,7 @@
 | `SF_PLAYBACK_CFG` | 1er segment des URL `/playback/` (contient le token AllDebrid) | obligatoire |
 | `SFFS_MOUNT` | Point de montage | obligatoire |
 | `SFFS_ALLOW_COMM` | Programmes autorisés à lire (regex sur le nom du processus). Valeur conseillée : `^(silo\|ffmpeg\|ffprobe)$` | `.` (tous) |
+| `SFFS_ALLOW_OTHER` | `1` : montage lisible par les autres utilisateurs (Silo sous un autre UID, Docker) | `0` |
 | `SFFS_ARM_TTL` | Durée de validité d'un armement | `6h` |
 | `SFFS_LANGS` | Langues préférées, dans l'ordre | `fr` |
 | `SFFS_REQUIRE_PREFERRED_HD` | Ignorer les titres sans version dans une langue préférée | `0` |
