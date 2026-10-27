@@ -63,7 +63,8 @@ Compose/Podman gardent l'ancienne disposition (`/mnt/sffs/sf`, vu comme `/mnt/sf
 ## Conventions
 
 - **Jamais** de nom ni d'e-mail personnel dans le code, les commits ou les fichiers. Identité git :
-  `haldir <haldir@localhost>` (vérifier `git config user.email` avant de committer).
+  `Haldir31 <53797644+Haldir31@users.noreply.github.com>`, l'adresse anonyme GitHub du compte : les commits
+  pointent vers le profil sans révéler d'e-mail (vérifier `git config user.email` avant de committer).
 - Jamais de secret dans le dépôt (clés AllDebrid/TMDB/API, mots de passe, URL d'addon chiffrée).
 - Tester sur un vrai serveur SSDV2 avant de pousser ; demander avant de toucher à la production
   (StreamFusion, warp, Plex…) ou de supprimer des données.
