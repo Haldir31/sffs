@@ -1,0 +1,113 @@
+# Chaque semaine : report des patchs sur la dernière version de Silo officiel.
+# - Silo officiel n'a pas bougé : rien à faire.
+# - Les patchs s'appliquent et les tests passent : pull request qui met à jour silo/patches et
+#   silo/BASE_COMMIT (à fusionner ; les images sont ensuite reconstruites par images.yml).
+# - Les patchs ne s'appliquent plus, ou les tests échouent : le workflow échoue (e-mail de GitHub) ;
+#   reporter les patchs à la main (voir CLAUDE.md, « Silo modifié »).
+name: silo-upstream
+
+on:
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  BOT_NAME: github-actions[bot]
+  BOT_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Appliquer les patchs sur Silo officiel (main)
+        id: rebase
+        run: |
+          base=$(cat silo/BASE_COMMIT)
+          git clone -q https://github.com/Silo-Server/silo-server.git "$RUNNER_TEMP/silo"
+          cd "$RUNNER_TEMP/silo"
+          head=$(git rev-parse HEAD)
+          echo "Silo officiel : $(git log -1 --format='%h %ci %s')"
+          echo "Base des patchs : $base"
+          if [ "$head" = "$base" ]; then
+            echo "Déjà à jour."
+            echo "uptodate=1" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          count=$(git rev-list --count "$base..$head")
+          echo "Commits depuis la base : $count"
+          git checkout -q -B sffs "$head"
+          git -c user.name="$BOT_NAME" -c user.email="$BOT_EMAIL" am -3 "$GITHUB_WORKSPACE"/silo/patches/*.patch
+          git diff --name-only "$head"..HEAD -- '*.go' | xargs -n1 dirname | sort -u | sed 's|^|./|' > "$RUNNER_TEMP/pkgs"
+          mig_old=$(git ls-tree --name-only "$base" migrations/sql/ | sed -n 's|.*/\([0-9]\{14\}\)_.*\.sql$|\1|p' | sort | tail -1)
+          mig_new=$(git ls-tree --name-only "$head" migrations/sql/ | sed -n 's|.*/\([0-9]\{14\}\)_.*\.sql$|\1|p' | sort | tail -1)
+          {
+            echo "head=$head"
+            echo "short=${head:0:9}"
+            echo "count=$count"
+            echo "mig_old=$mig_old"
+            echo "mig_new=$mig_new"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@v5
+        if: steps.rebase.outputs.uptodate != '1'
+        with:
+          go-version-file: ${{ runner.temp }}/silo/go.mod
+          cache-dependency-path: ${{ runner.temp }}/silo/go.sum
+
+      - name: go vet, go test (paquets patchés)
+        if: steps.rebase.outputs.uptodate != '1'
+        working-directory: ${{ runner.temp }}/silo
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq libvips-dev >/dev/null
+          mkdir -p web/dist && echo ok > web/dist/placeholder
+          pkgs=$(cat "$RUNNER_TEMP/pkgs")
+          go build ./...
+          go vet $pkgs
+          go test $pkgs
+          rm -rf web/dist
+
+      - name: Pull request
+        if: steps.rebase.outputs.uptodate != '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD: ${{ steps.rebase.outputs.head }}
+          SHORT: ${{ steps.rebase.outputs.short }}
+          COUNT: ${{ steps.rebase.outputs.count }}
+          MIG_OLD: ${{ steps.rebase.outputs.mig_old }}
+          MIG_NEW: ${{ steps.rebase.outputs.mig_new }}
+        run: |
+          branch="silo-upstream/$SHORT"
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
+            echo "La branche $branch existe déjà : pull request déjà ouverte pour cette version."
+            exit 0
+          fi
+          # Patchs régénérés, mêmes noms de fichiers (seul l'ordre compte pour git am).
+          out="$RUNNER_TEMP/patches"
+          git -C "$RUNNER_TEMP/silo" format-patch -q --no-signature "$HEAD..HEAD" -o "$out"
+          for f in "$out"/*.patch; do
+            n=$(basename "$f" | cut -c1-4)
+            old=$(ls silo/patches/"$n"-*.patch 2>/dev/null | head -1)
+            [ -n "$old" ] && cp "$f" "$old" || cp "$f" silo/patches/
+          done
+          echo "$HEAD" > silo/BASE_COMMIT
+          git checkout -q -b "$branch"
+          git add silo
+          msg=$(printf '%s\n\n%s\n%s\n' \
+            "Patchs Silo reportés sur la dernière version officielle ($SHORT)" \
+            "$COUNT commits de Silo officiel depuis la base précédente. Patchs appliqués sans conflit," \
+            "go build, go vet et go test des paquets patchés passent.")
+          git -c user.name="$BOT_NAME" -c user.email="$BOT_EMAIL" commit -q -m "$msg"
+          git push -q origin "$branch"
+          body=$(printf '%s\n\n%s\n%s\n%s\n\n%s\n' \
+            "Report automatique des patchs sffs sur Silo officiel \`$SHORT\` ($COUNT commits depuis la base précédente)." \
+            "- Patchs appliqués sans conflit (\`git am -3\`)." \
+            "- \`go build\`, \`go vet\` et \`go test\` des paquets patchés : OK." \
+            "- Dernière migration de base : \`$MIG_OLD\` → \`$MIG_NEW\`. Une fois les nouvelles images déployées, Silo migre sa base : pas de retour possible vers l'ancienne image." \
+            "À la fusion, images.yml reconstruit et publie les images ; la prochaine relance de l'application sffs les déploie.")
+          gh pr create --base main --head "$branch" --title "Silo officiel $SHORT : report des patchs" --body "$body"

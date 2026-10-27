@@ -1,0 +1,66 @@
+From 3547afb789245c8d5d68f991fe0c5d43e4462418 Mon Sep 17 00:00:00 2001
+From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
+Date: Mon, 26 Oct 2026 13:58:19 +0000
+Subject: [PATCH 3/6] =?UTF-8?q?sffs=20:=20r=C3=A9analyser=20un=20fichier?=
+ =?UTF-8?q?=20virtuel=20seulement=20quand=20il=20est=20arm=C3=A9=20(lectur?=
+ =?UTF-8?q?e)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Sans duree, Silo refuse de planifier la lecture. La version lancee est
+armee : la reparation fait alors un vrai ffprobe et enregistre la duree
+et les pistes reelles. Les versions consultees restent sans ffprobe.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ internal/scanner/probe_repair.go |  7 ++++---
+ internal/sfvirtual/sfvirtual.go  | 10 ++++++++++
+ 2 files changed, 14 insertions(+), 3 deletions(-)
+
+diff --git a/internal/scanner/probe_repair.go b/internal/scanner/probe_repair.go
+index 83bea74bd..b1412a1d6 100644
+--- a/internal/scanner/probe_repair.go
++++ b/internal/scanner/probe_repair.go
+@@ -403,9 +403,10 @@ func (e *PlaybackProbeEnsurer) ensureProbeRepair(ctx context.Context, file *mode
+ 	if file == nil || e == nil || e.fileRepo == nil {
+ 		return file, nil
+ 	}
+-	// Version virtuelle StreamFusion : ses caractéristiques viennent de StreamFusion, et un
+-	// ffprobe lirait le fichier chez le débrideur.
+-	if sfvirtual.Under(file.FilePath) {
++	// Version virtuelle StreamFusion : tant qu'elle n'est pas armée (simple consultation), pas de
++	// ffprobe, qui lirait le fichier chez le débrideur. Armée (lecture en cours), la réparation
++	// complète ce que StreamFusion ne fournit pas (durée, pistes réelles) et l'enregistre.
++	if sfvirtual.Under(file.FilePath) && !sfvirtual.IsArmed(file.FilePath) {
+ 		return file, nil
+ 	}
+ 
+diff --git a/internal/sfvirtual/sfvirtual.go b/internal/sfvirtual/sfvirtual.go
+index 41f9eab5b..3f5198929 100644
+--- a/internal/sfvirtual/sfvirtual.go
++++ b/internal/sfvirtual/sfvirtual.go
+@@ -19,6 +19,7 @@ import (
+ const (
+ 	attrProbe = "user.sf.probe"
+ 	attrArm   = "user.sf.arm"
++	attrArmed = "user.sf.armed"
+ )
+ 
+ // Info décrit une version telle que sffs la tire de la base StreamFusion.
+@@ -93,6 +94,15 @@ func IsVirtual(path string) bool {
+ 	return ok
+ }
+ 
++// IsArmed indique si la lecture de path est autorisée (sans l'autoriser).
++func IsArmed(path string) bool {
++	if !Under(path) {
++		return false
++	}
++	b, err := getxattr(path, attrArmed)
++	return err == nil && string(b) == "1"
++}
++
+ // Arm autorise la lecture de path pendant quelques heures. Sans effet sur un fichier ordinaire.
+ func Arm(path string) {
+ 	if !Under(path) {

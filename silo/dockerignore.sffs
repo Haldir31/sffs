@@ -1,0 +1,15 @@
+.git
+.claude
+.superpowers
+.env
+.env.*
+docs/
+!docs/design/schemas/
+node_modules
+web/node_modules
+web/dist
+web/assets-source
+silo
+streamapp
+*.md
+.playwright-cli/

@@ -1,0 +1,65 @@
+# Tests : sffs (go vet, go test) et Silo modifié (patchs appliqués sur silo/BASE_COMMIT, go vet et
+# go test des paquets touchés par les patchs). Appelé par images.yml avant toute publication, et lancé
+# seul sur les autres branches et les pull requests.
+name: tests
+
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+  workflow_call:
+    inputs:
+      silo_ref:
+        description: 'Commit de Silo officiel (défaut : silo/BASE_COMMIT)'
+        type: string
+        default: ''
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sffs:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: sffs/go.mod
+          cache-dependency-path: sffs/go.sum
+      - name: go vet, go test
+        working-directory: sffs
+        run: |
+          test -z "$(gofmt -l .)" || { gofmt -l .; echo "gofmt : fichiers à formater" >&2; exit 1; }
+          go vet ./...
+          go test ./...
+
+  silo:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Silo officiel + patchs
+        run: |
+          base="${{ inputs.silo_ref }}"
+          [ -n "$base" ] || base=$(cat silo/BASE_COMMIT)
+          git clone -q https://github.com/Silo-Server/silo-server.git "$RUNNER_TEMP/silo"
+          cd "$RUNNER_TEMP/silo"
+          git checkout -q "$base"
+          git -c user.name=ci -c user.email=ci@localhost am -q "$GITHUB_WORKSPACE"/silo/patches/*.patch
+          # Paquets Go modifiés par les patchs.
+          git diff --name-only "$base"..HEAD -- '*.go' | xargs -n1 dirname | sort -u | sed 's|^|./|' > "$RUNNER_TEMP/pkgs"
+          cat "$RUNNER_TEMP/pkgs"
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ runner.temp }}/silo/go.mod
+          cache-dependency-path: ${{ runner.temp }}/silo/go.sum
+      - name: go vet, go test (paquets patchés)
+        working-directory: ${{ runner.temp }}/silo
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq libvips-dev >/dev/null
+          # L'interface web n'est pas construite ici : le binaire complet l'embarque.
+          mkdir -p web/dist && echo ok > web/dist/placeholder
+          pkgs=$(cat "$RUNNER_TEMP/pkgs")
+          go build ./...
+          go vet $pkgs
+          go test $pkgs

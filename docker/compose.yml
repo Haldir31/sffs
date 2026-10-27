@@ -1,0 +1,92 @@
+# sffs + Silo avec Docker Compose (serveur Docker sans SSDV2).
+#   1. ./build-images.sh             (à la racine du dépôt : images localhost/sffs et localhost/silo-sffs)
+#   2. cp docker/.env.example docker/.env && nano docker/.env
+#   3. docker compose -f docker/compose.yml up -d
+# Prérequis hôte : /dev/fuse, et le dossier parent de SFFS_HOST_MOUNT en propagation partagée
+# (vrai par défaut avec systemd ; sinon : sudo mount --make-rshared /).
+name: sffs
+
+services:
+  sffs:
+    image: localhost/sffs:latest
+    container_name: sffs
+    restart: always
+    devices: [/dev/fuse]
+    cap_add: [SYS_ADMIN]
+    security_opt: [apparmor:unconfined]
+    # Voir les processus de l'hôte : sffs vérifie quel programme lit un fichier (SFFS_ALLOW_COMM).
+    pid: host
+    stop_grace_period: 30s
+    env_file: .env
+    environment:
+      SFFS_MOUNT: /mnt/sffs/sf
+      SFFS_ALLOW_OTHER: "1"
+      SFFS_ALLOW_COMM: "^(silo|ffmpeg|ffprobe)$"
+      SFFS_SILO_URL: http://silo:8080
+      SFFS_SILO_FILMS: /mnt/sf/films
+      SFFS_SILO_SERIES: /mnt/sf/series
+    volumes:
+      # Le montage FUSE remonte vers l'hôte (rshared), puis redescend dans Silo (rslave).
+      - ${SFFS_HOST_MOUNT:-/mnt/sffs}:/mnt/sffs:rshared
+      - ./data/sffs:/config
+    networks: [default, streamfusion]
+
+  silo:
+    image: localhost/silo-sffs:latest
+    container_name: silo
+    restart: unless-stopped
+    depends_on: [silo-postgres, silo-redis, sffs]
+    stop_grace_period: 120s
+    environment:
+      MODE: integrated
+      PORT: "8080"
+      JF_PORT: "8096"
+      ABS_PORT: "13378"
+      SECRET_KEY: ${SILO_SECRET_KEY:?SILO_SECRET_KEY manquant dans .env}
+      DATABASE_URL: postgres://silo:${SILO_DB_PASS:?SILO_DB_PASS manquant}@silo-postgres:5432/silo?sslmode=disable
+      REDIS_URL: redis://silo-redis:6379
+      SILO_PLUGIN_CACHE_DIR: /var/lib/silo/plugins
+      SILO_SF_ROOT: /mnt/sf
+      SILO_SHUTDOWN_DELAY: "0"
+      GOMAXPROCS: ${SILO_GOMAXPROCS:-8}
+      TZ: ${TZ:-Europe/Paris}
+    volumes:
+      # Dossier parent (sffs monte dans son sous-dossier sf) : Silo voit chaque nouveau montage.
+      - ${SFFS_HOST_MOUNT:-/mnt/sffs}:/mnt:ro,rslave
+      - ./data/silo/plugins:/var/lib/silo/plugins
+      - ./data/silo/artwork:/var/lib/silo/artwork
+      - ./data/silo/compat:/var/lib/silo/compat
+      - ./data/silo/transcode:/tmp/silo-transcode
+      - ./data/silo/download-artifacts:/tmp/silo-download-artifacts
+    ports:
+      # Sur 127.0.0.1 : mettre un reverse proxy HTTPS devant.
+      - 127.0.0.1:${SILO_WEB_PORT:-27461}:8080   # web + API
+      - 127.0.0.1:${SILO_JF_PORT:-21481}:8096    # API compatible Jellyfin
+
+  silo-postgres:
+    image: pgvector/pgvector:pg18
+    container_name: silo-postgres
+    restart: unless-stopped
+    shm_size: 256m
+    command: ["postgres", "-c", "max_connections=50", "-c", "shared_buffers=256MB"]
+    environment:
+      POSTGRES_USER: silo
+      POSTGRES_PASSWORD: ${SILO_DB_PASS}
+      POSTGRES_DB: silo
+    volumes:
+      - ./data/silo/postgres:/var/lib/postgresql
+
+  silo-redis:
+    image: redis:alpine
+    container_name: silo-redis
+    restart: unless-stopped
+    command: ["redis-server", "--io-threads", "1"]
+    volumes:
+      - ./data/silo/redis:/data
+
+networks:
+  # Réseau où tournent StreamFusion et sa base (pour SF_BASE et SF_PG_DSN par nom de conteneur).
+  # Remplacer par le nom réel (docker network ls), ou supprimer et utiliser des adresses IP/ports publiés.
+  streamfusion:
+    external: true
+    name: ${SF_NETWORK:-streamfusion}

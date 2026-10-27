@@ -1,0 +1,107 @@
+From 7343c46a98fcfea905c0bb78a4afd386b227e459 Mon Sep 17 00:00:00 2001
+From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
+Date: Mon, 26 Oct 2026 14:31:24 +0000
+Subject: [PATCH 5/6] sffs : une version hors cache bascule sur une autre
+ version du titre
+
+A la lecture, Silo demande a sffs si la version est prete chez le
+debrideur (user.sf.cached). Sinon elle est lue comme illisible pour
+cette lecture seulement, et le repli de version existant en essaie une
+autre. Rien n'est telecharge.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ internal/scanner/probe_repair.go | 12 ++++++++++--
+ internal/scanner/sf_virtual.go   | 14 ++++++++++++++
+ internal/sfvirtual/sfvirtual.go  | 17 ++++++++++++++---
+ 3 files changed, 38 insertions(+), 5 deletions(-)
+
+diff --git a/internal/scanner/probe_repair.go b/internal/scanner/probe_repair.go
+index b1412a1d6..8690f55d2 100644
+--- a/internal/scanner/probe_repair.go
++++ b/internal/scanner/probe_repair.go
+@@ -406,8 +406,16 @@ func (e *PlaybackProbeEnsurer) ensureProbeRepair(ctx context.Context, file *mode
+ 	// Version virtuelle StreamFusion : tant qu'elle n'est pas armée (simple consultation), pas de
+ 	// ffprobe, qui lirait le fichier chez le débrideur. Armée (lecture en cours), la réparation
+ 	// complète ce que StreamFusion ne fournit pas (durée, pistes réelles) et l'enregistre.
+-	if sfvirtual.Under(file.FilePath) && !sfvirtual.IsArmed(file.FilePath) {
+-		return file, nil
++	if sfvirtual.Under(file.FilePath) {
++		if !sfvirtual.IsArmed(file.FilePath) {
++			return file, nil
++		}
++		// Absente du cache du débrideur : illisible pour cette lecture (rien n'est enregistré),
++		// pour que Silo bascule sur une autre version au lieu de lancer un téléchargement.
++		if !sfvirtual.IsCached(file.FilePath) {
++			slog.InfoContext(ctx, "streamfusion: version absente du cache, autre version tentée", "component", "scanner", "file_id", file.ID)
++			return sfUnavailableCopy(file), nil
++		}
+ 	}
+ 
+ 	current := file
+diff --git a/internal/scanner/sf_virtual.go b/internal/scanner/sf_virtual.go
+index 0e6cec988..4512d673f 100644
+--- a/internal/scanner/sf_virtual.go
++++ b/internal/scanner/sf_virtual.go
+@@ -2,8 +2,10 @@ package scanner
+ 
+ import (
+ 	"strings"
++	"time"
+ 
+ 	"github.com/Silo-Server/silo-server/internal/lang"
++	"github.com/Silo-Server/silo-server/internal/models"
+ 	"github.com/Silo-Server/silo-server/internal/sfvirtual"
+ )
+ 
+@@ -77,3 +79,15 @@ func sfProbeData(info *sfvirtual.Info) *ProbeData {
+ 	}
+ 	return p
+ }
++
++// sfUnavailableCopy renvoie une copie de file que le planificateur lit comme illisible
++// (models.MediaFile.ProbeRejected), sans toucher à la ligne en base.
++func sfUnavailableCopy(file *models.MediaFile) *models.MediaFile {
++	c := *file
++	now := time.Now().UTC()
++	c.ProbeFailedAt = &now
++	c.ProbeUpdatedAt = nil
++	c.CodecVideo, c.CodecAudio = "", ""
++	c.VideoTracks, c.AudioTracks = nil, nil
++	return &c
++}
+diff --git a/internal/sfvirtual/sfvirtual.go b/internal/sfvirtual/sfvirtual.go
+index 3f5198929..bdfd0a245 100644
+--- a/internal/sfvirtual/sfvirtual.go
++++ b/internal/sfvirtual/sfvirtual.go
+@@ -17,9 +17,10 @@ import (
+ )
+ 
+ const (
+-	attrProbe = "user.sf.probe"
+-	attrArm   = "user.sf.arm"
+-	attrArmed = "user.sf.armed"
++	attrProbe  = "user.sf.probe"
++	attrArm    = "user.sf.arm"
++	attrArmed  = "user.sf.armed"
++	attrCached = "user.sf.cached"
+ )
+ 
+ // Info décrit une version telle que sffs la tire de la base StreamFusion.
+@@ -103,6 +104,16 @@ func IsArmed(path string) bool {
+ 	return err == nil && string(b) == "1"
+ }
+ 
++// IsCached indique si la version est prête chez le débrideur (sffs le vérifie sans rien télécharger).
++// Un fichier ordinaire est toujours considéré disponible.
++func IsCached(path string) bool {
++	if !Under(path) {
++		return true
++	}
++	b, err := getxattr(path, attrCached)
++	return err == nil && string(b) == "1"
++}
++
+ // Arm autorise la lecture de path pendant quelques heures. Sans effet sur un fichier ordinaire.
+ func Arm(path string) {
+ 	if !Under(path) {
