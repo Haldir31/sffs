@@ -2,6 +2,40 @@
 # Pretask SSDV2 de sffs : secrets, rôle Postgres en lecture seule dans stremio-postgres,
 # configuration StreamFusion et image Docker.
 
+# --- Prérequis : rien n'est créé si StreamFusion ou silosffs manque -------------------------
+
+- name: StreamFusion est-il installé par SSDV2 ?
+  ansible.builtin.command: sqlite3 "{{ settings.source }}/ssddb" "select status from applications where name='streamfusion'"
+  register: sffs_reg_sf
+  changed_when: false
+  check_mode: false
+  failed_when: false
+
+- name: Refuser l'installation sans StreamFusion
+  ansible.builtin.fail:
+    msg: "StreamFusion n'est pas installé par SSDV2 (ou sqlite3 manque) : l'installer d'abord."
+  when: sffs_reg_sf.rc != 0 or sffs_reg_sf.stdout | trim != '2'
+
+- name: silosffs est-il installé par SSDV2 ?
+  ansible.builtin.command: sqlite3 "{{ settings.source }}/ssddb" "select status from applications where name='silosffs'"
+  register: sffs_reg_silo
+  changed_when: false
+  check_mode: false
+  failed_when: false
+
+- name: silosffs est-il démarré ?
+  ansible.builtin.command: docker inspect -f '{% raw %}{{.State.Running}}{% endraw %}' silosffs
+  register: sffs_silo_running
+  changed_when: false
+  check_mode: false
+  failed_when: false
+
+# sffs ne sert qu'à silosffs : seul lecteur capable d'« armer » un fichier avant de le lire.
+- name: Refuser l'installation sans silosffs
+  ansible.builtin.fail:
+    msg: "silosffs (Silo pour sffs) n'est pas installé ou est arrêté : l'installer d'abord (ssd/install.sh --only silo)."
+  when: sffs_reg_silo.stdout | default('') | trim != '2' or sffs_silo_running.stdout | default('') | trim != 'true'
+
 - name: Dossier des secrets sffs
   ansible.builtin.set_fact:
     sffs_secret_dir: "{{ settings.storage }}/docker/{{ lookup('env','USER') }}/sffs-secrets"

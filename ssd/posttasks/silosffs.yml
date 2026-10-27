@@ -25,5 +25,5 @@
     msg:
       - "Silo est prêt : https://{{ sub[pgrole][pgrole] if sub_enabled else pgrole }}.{{ user.domain }}"
       - "1. Crée le compte admin dans l'interface web."
-      - "2. Ajoute les bibliothèques : Films -> /mnt/sf/films, Séries -> /mnt/sf/series"
+      - "2. Une fois sffs installé, ajoute les bibliothèques : Films -> /mnt/sf/films, Séries -> /mnt/sf/series"
       - "3. Lance <dépôt sffs>/ssd/silo-key.sh : clé d'API pour les scans ciblés de sffs."

@@ -2,7 +2,7 @@
 # Intègre sffs et Silo (silosffs) dans une installation SSDV2 existante, puis les installe
 # par le mécanisme SSDV2 standard (launch_service : pretasks -> conteneur -> posttasks -> registre).
 #
-#   ssd/install.sh [options]          installe sffs puis silosffs
+#   ssd/install.sh [options]          installe silosffs puis sffs
 #   ssd/install.sh --files            copie seulement les définitions d'applications
 #
 # Options (toutes facultatives ; sans elles, les questions sont posées pendant l'installation) :
@@ -10,7 +10,9 @@
 #                         configuration est générée (clé API StreamFusion dédiée + clé AllDebrid de decypharr)
 #   --subdomain <nom>     sous-domaine de Silo (défaut demandé ; l'API Jellyfin est sur <nom>-jf)
 #   --auth <type>         authentification Traefik de Silo : aucune conseillé (Silo a ses comptes)
-#   --only sffs|silo      n'installer qu'une des deux applications
+#   --only sffs|silo      n'installer qu'une des deux applications (sffs seul exige silosffs installé)
+#
+# Refuse de démarrer si StreamFusion n'est pas installé par SSDV2 et démarré.
 #
 # La clé TMDB est reprise de StreamFusion. Prérequis : StreamFusion installé par SSDV2.
 # Ne modifie aucun fichier suivi par git dans SSDV2 : les mises à jour (git pull) restent possibles.
@@ -41,15 +43,23 @@ docker info >/dev/null 2>&1 || fail "docker inaccessible pour $USER (groupe dock
 ok "docker"
 [ -e /dev/fuse ] || fail "/dev/fuse absent (modprobe fuse)"
 ok "/dev/fuse"
-running() { [ "$(docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null)" = true ]; }
-running stremio-postgres || fail "conteneur stremio-postgres arrêté ou absent : installer StreamFusion avec SSDV2 d'abord"
+command -v sqlite3 >/dev/null || fail "sqlite3 introuvable (nécessaire pour lire le registre SSDV2)"
+ssd_registered streamfusion || fail "StreamFusion n'est pas installé par SSDV2 : l'installer d'abord (menu SSDV2)"
+running stremio-postgres || fail "conteneur stremio-postgres arrêté ou absent : démarrer StreamFusion d'abord"
 SF=""
 for c in $(docker ps --filter label=ssdv2.app=streamfusion --format '{{.Names}}') stream-fusion streamfusion; do
   case "$c" in stremio-*|taskiq-*|sftorznab*) continue ;; esac
   running "$c" && docker inspect -f '{{.Config.Image}}' "$c" | grep -q stream-fusion && { SF=$c; break; }
 done
 [ -n "$SF" ] || fail "conteneur StreamFusion introuvable (stream-fusion ou streamfusion)"
-ok "StreamFusion : conteneurs $SF et stremio-postgres"
+ok "StreamFusion installé : conteneurs $SF et stremio-postgres"
+# sffs n'est utilisable qu'avec silosffs (seul lecteur autorisé) : déjà installé, ou installé
+# avant sffs dans ce même lancement.
+if [ "$ONLY" = sffs ]; then
+  ssd_registered silosffs && running silosffs ||
+    fail "silosffs (Silo pour sffs) n'est pas installé ou est arrêté : lancer ssd/install.sh sans --only, ou --only silo d'abord"
+  ok "silosffs installé"
+fi
 prop=$(findmnt -no PROPAGATION --target /mnt 2>/dev/null || true)
 case "$prop" in
   shared*) ok "/mnt en propagation partagée" ;;
@@ -86,6 +96,15 @@ TMDB=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$SF" | sed
 export ANSIBLE_EXTRA_VARS_FILE=$EXTRA
 [ -n "$TMDB" ] && ok "clé TMDB reprise de StreamFusion"
 
+if [ "$ONLY" != sffs ]; then
+  echo "== Installation de Silo (silosffs)"
+  [ -n "$SUB" ] && ssd_account "sub.silosffs.silosffs" "$SUB"
+  [ -n "$AUTH" ] && ssd_account "sub.silosffs.auth" "$AUTH"
+  echo "   Première fois : construction de l'image Silo, 5 à 15 min (plus sur ARM ou petit CPU)."
+  ssd_launch silosffs || fail "installation de silosffs"
+  ssd_registered silosffs || fail "silosffs non enregistré par SSDV2 après installation"
+fi
+
 if [ "$ONLY" != silo ]; then
   echo "== Installation de sffs"
   ssd_launch sffs || fail "installation de sffs"
@@ -93,14 +112,6 @@ if [ "$ONLY" != silo ]; then
   for _ in $(seq 1 240); do [ -d /mnt/sffs/sf/films ] && break; sleep 10; done
   [ -d /mnt/sffs/sf/films ] || fail "/mnt/sffs/sf non monté : docker logs sffs"
   ok "/mnt/sffs/sf monté ($(ls /mnt/sffs/sf/films | wc -l) films)"
-fi
-
-if [ "$ONLY" != sffs ]; then
-  echo "== Installation de Silo (silosffs)"
-  [ -n "$SUB" ] && ssd_account "sub.silosffs.silosffs" "$SUB"
-  [ -n "$AUTH" ] && ssd_account "sub.silosffs.auth" "$AUTH"
-  echo "   Première fois : construction de l'image Silo, 5 à 15 min (plus sur ARM ou petit CPU)."
-  ssd_launch silosffs || fail "installation de silosffs"
 fi
 
 cat <<EOF

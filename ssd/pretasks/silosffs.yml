@@ -1,6 +1,32 @@
 ---
 # Pretask SSDV2 de silosffs : secrets, image, base Postgres (pgvector) et Redis compagnons.
 
+- name: StreamFusion est-il installé par SSDV2 ?
+  ansible.builtin.command: sqlite3 "{{ settings.source }}/ssddb" "select status from applications where name='streamfusion'"
+  register: silosffs_reg_sf
+  changed_when: false
+  check_mode: false
+  failed_when: false
+
+- name: Refuser l'installation sans StreamFusion
+  ansible.builtin.fail:
+    msg: "StreamFusion n'est pas installé par SSDV2 (ou sqlite3 manque) : l'installer d'abord."
+  when: silosffs_reg_sf.rc != 0 or silosffs_reg_sf.stdout | trim != '2'
+
+- name: Refuser l'installation si StreamFusion est arrêté
+  ansible.builtin.command: docker inspect -f '{% raw %}{{.State.Running}}{% endraw %}' stremio-postgres
+  register: silosffs_sf_pg
+  changed_when: false
+  check_mode: false
+  failed_when: silosffs_sf_pg.rc != 0 or silosffs_sf_pg.stdout | trim != 'true'
+
+- name: Créer /mnt/sffs (sffs y montera ses fichiers, dans sf/)
+  become: true
+  ansible.builtin.file:
+    path: /mnt/sffs
+    state: directory
+    mode: "0755"
+
 - name: Dossiers de Silo
   ansible.builtin.set_fact:
     silo_dir: "{{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}"

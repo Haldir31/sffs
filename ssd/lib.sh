@@ -23,3 +23,10 @@ ssd_launch() {
 ssd_account() {
   bash "$SETTINGS_SOURCE/includes/config/scripts/generique.sh" manage_account_yml "$1" "$2" >/dev/null
 }
+
+# Une application est « installée » si SSDV2 l'a enregistrée (ssddb, statut 2).
+ssd_registered() {
+  [ -f "$SETTINGS_SOURCE/ssddb" ] && command -v sqlite3 >/dev/null &&
+    [ "$(sqlite3 "$SETTINGS_SOURCE/ssddb" "select status from applications where name='$1'" 2>/dev/null)" = 2 ]
+}
+running() { [ "$(docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null)" = true ]; }

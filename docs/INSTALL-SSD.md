@@ -72,7 +72,10 @@ Toutes les options : `--subdomain`, `--auth`, `--manifest`, `--only sffs|silo`, 
 les questions sont posées pendant l'installation.
 
 Le script :
-1. **Vérifie** Docker, `/dev/fuse`, StreamFusion et la propagation de `/mnt`.
+1. **Vérifie** Docker, `/dev/fuse` et la propagation de `/mnt`. Il **refuse de démarrer** si StreamFusion
+   n'est pas installé par SSDV2 (registre `ssddb`) et démarré. sffs seul (`--only sffs`) exige en plus que
+   silosffs soit installé et démarré : c'est le seul lecteur capable d'ouvrir ses fichiers. Les mêmes
+   contrôles sont faits par les pretasks, avant toute création, si l'installation est lancée autrement.
 2. **Dépose les définitions** d'applications dans SSDV2 : `vars/` dans `<SETTINGS_STORAGE>/vars/`, `pretasks/`
    et `posttasks/` dans les sources SSDV2.
 3. **Installe sffs.** Il génère la configuration StreamFusion (étape 2), crée le rôle `sffs_reader`, construit
