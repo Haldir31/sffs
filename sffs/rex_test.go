@@ -131,3 +131,9 @@ func TestCompatOrder(t *testing.T) {
 		t.Error("quality : la 4K REMUX devrait passer en tête")
 	}
 }
+
+func TestContentType(t *testing.T) {
+	if contentType("a.MP4") != "video/mp4" || contentType("a.mkv") != "video/x-matroska" {
+		t.Error("type de contenu")
+	}
+}

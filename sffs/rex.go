@@ -813,6 +813,17 @@ func (s *rexSource) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	v := rf.f.v
 	ctx := r.Context()
+	// HEAD : rex vérifie seulement que le fichier existe (checkFiles des applications Plex, sur
+	// toutes les versions d'un titre à chaque ouverture). La réponse vient de l'arborescence,
+	// sans rien demander au débrideur ni à StreamFusion.
+	if r.Method == http.MethodHead {
+		h := w.Header()
+		h.Set("Accept-Ranges", "bytes")
+		h.Set("Content-Type", contentType(v.name))
+		h.Set("Content-Length", fmt.Sprint(v.size))
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	fromFFprobe := strings.HasPrefix(r.UserAgent(), "Lavf")
 	if !fromFFprobe {
 		log.Printf("rex : lecture %s %q (%s)", v.id, v.name, orDefault(r.Header.Get("Range"), "tout"))
@@ -839,8 +850,6 @@ func (s *rexSource) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 		if rg := r.Header.Get("Range"); rg != "" {
 			req.Header.Set("Range", rg)
-		} else if r.Method == http.MethodHead {
-			req.Header.Set("Range", "bytes=0-0")
 		}
 		req.Header.Set("User-Agent", "Mozilla/5.0")
 		resp, err = s.root.st.data.Do(req)
@@ -868,13 +877,7 @@ func (s *rexSource) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	h.Set("Accept-Ranges", "bytes")
-	h.Set("Content-Type", map[bool]string{true: "video/mp4", false: "video/x-matroska"}[strings.HasSuffix(v.name, ".mp4")])
-	if r.Method == http.MethodHead {
-		h.Del("Content-Range")
-		h.Set("Content-Length", fmt.Sprint(v.size))
-		w.WriteHeader(http.StatusOK)
-		return
-	}
+	h.Set("Content-Type", contentType(v.name))
 	w.WriteHeader(resp.StatusCode)
 	if !fromFFprobe && resp.StatusCode != http.StatusRequestedRangeNotSatisfiable {
 		s.probeAfterPlay(rf) // en tâche de fond, une fois par source servie
@@ -957,4 +960,11 @@ func (s *rexSource) sortFiles(files []rexFile) {
 		}
 		return files[i].path < files[j].path
 	})
+}
+
+func contentType(name string) string {
+	if strings.HasSuffix(strings.ToLower(name), ".mp4") {
+		return "video/mp4"
+	}
+	return "video/x-matroska"
 }
