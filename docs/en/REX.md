@@ -16,8 +16,10 @@ alongside.
   with season and episode); rex groups the versions of a title.
 - **Bytes.** sffs listens on `SFFS_REX_LISTEN` (127.0.0.1 by default) and requires a bearer token
   that rex gets when the source registers. A request from rex is relayed to AllDebrid with the same
-  `Range`, through `SFFS_DEBRID_PROXY` when set. A version no longer cached is replaced by a cached
-  one, as for Silo.
+  `Range`, through `SFFS_DEBRID_PROXY` when set. Unlike Silo, a version no longer cached is **not**
+  silently replaced: rex announced that file's size and tracks, and a player handed another file
+  stops (seen on Apple TV). sffs answers "unavailable" and removes the version from rex for 6 hours
+  (`SFFS_REX_STATE/excluded.json`). `SFFS_CACHED_ONLY=1` avoids most of these cases.
 - **Version order.** A Plex app plays a title's first version: the server does not choose, it
   converts the one asked for. sffs therefore sends each title's versions from the most compatible
   (1080p, then 720p, then 4K; H.264 before HEVC; SDR; AC3/E-AC3/AAC audio before DTS/TrueHD) to the

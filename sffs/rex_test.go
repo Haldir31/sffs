@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestSynthMediaInfo(t *testing.T) {
@@ -154,4 +155,23 @@ func TestTMDBRuntimesNil(t *testing.T) {
 		t.Error("sans clé TMDB, aucune durée")
 	}
 	r.save()
+}
+
+func TestRexExclude(t *testing.T) {
+	s := newRexSource(rexConfig{stateDir: t.TempDir()}, nil)
+	rf := rexFile{dir: "films/A", f: &fileNode{v: &version{id: "x", name: "a.mkv"}}}
+	s.exclude(rf, "test")
+	if !s.isExcluded("x") || !s.pending["films/A"] {
+		t.Fatal("version non exclue ou dossier non renvoyé")
+	}
+	s.pending = map[string]bool{}
+	s.excluded["x"] = rexExcluded{Until: time.Now().Add(-time.Minute), Dir: "films/A"}
+	s.expireExcluded()
+	if s.isExcluded("x") || !s.pending["films/A"] {
+		t.Fatal("exclusion expirée mais dossier non reproposé")
+	}
+	s2 := newRexSource(rexConfig{stateDir: s.cfg.stateDir}, nil)
+	if len(s2.excluded) != 0 {
+		t.Error("exclusions non relues ou non nettoyées")
+	}
 }

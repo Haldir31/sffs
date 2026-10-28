@@ -163,6 +163,21 @@ func (r *resolver) cached(ctx context.Context, v *version) bool {
 	return false
 }
 
+// originalCached indique si la version elle-même (sans remplaçante) est en cache chez le
+// débrideur. Ne remplace rien : pour rex, qui ne sait pas qu'un fichier peut changer.
+func (r *resolver) originalCached(ctx context.Context, v *version) bool {
+	if v.imdb == "" {
+		return false
+	}
+	e := r.entry(v)
+	if e.err != nil {
+		return false
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return e.instant[v.infoHash]
+}
+
 // servedHash renvoie le hash du torrent réellement lu pour cette version (la remplaçante s'il y en a une).
 func (r *resolver) servedHash(v *version) string {
 	r.mu.Lock()

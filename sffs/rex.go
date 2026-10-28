@@ -408,6 +408,9 @@ type rexSource struct {
 
 	runtimes *tmdbRuntimes // durées TMDB des fichiers pas encore analysés (nil sans clé TMDB)
 
+	emu      sync.Mutex
+	excluded map[string]rexExcluded // versions hors cache retirées de rex
+
 	pmu     sync.Mutex
 	probes  map[string]storedProbe
 	probing map[string]bool
@@ -418,7 +421,10 @@ var rexFeed *rexSource // nil : source rex coupée
 func newRexSource(cfg rexConfig, root *rootNode) *rexSource {
 	s := &rexSource{cfg: cfg, root: root, http: &http.Client{Timeout: 15 * time.Minute},
 		pending: map[string]bool{}, full: true, sent: map[string]map[string]string{},
-		probes: map[string]storedProbe{}, probing: map[string]bool{}}
+		probes: map[string]storedProbe{}, probing: map[string]bool{}, excluded: map[string]rexExcluded{}}
+	if b, err := os.ReadFile(filepath.Join(cfg.stateDir, "excluded.json")); err == nil {
+		_ = json.Unmarshal(b, &s.excluded)
+	}
 	if root != nil && root.st != nil && root.st.cfg.tmdbKey != "" {
 		s.runtimes = newTMDBRuntimes(root.st.cfg.tmdbKey, filepath.Join(cfg.stateDir, "runtimes.json"))
 	}
@@ -485,6 +491,7 @@ func (s *rexSource) loop() {
 				continue
 			}
 		}
+		s.expireExcluded()
 		if err := s.flush(); err != nil {
 			log.Printf("rex : envoi des modifications : %v", err)
 		}
@@ -567,6 +574,9 @@ func (s *rexSource) files(dirs map[string]bool) map[string][]rexFile {
 			add := func(sub *fs.Inode, parts ...string) {
 				for fname, ch := range sub.Children() {
 					if f, ok := ch.Operations().(*fileNode); ok {
+						if s.isExcluded(f.v.id) {
+							continue
+						}
 						p := append(append([]string{}, parts...), fname)
 						out[key] = append(out[key], rexFile{dir: key, path: rexPath(top, p...), tmdb: tmdbOf[dname], f: f})
 					}
@@ -850,6 +860,13 @@ func (s *rexSource) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !fromFFprobe {
 		log.Printf("rex : lecture %s %q (%s)", v.id, v.name, orDefault(r.Header.Get("Range"), "tout"))
 	}
+	// Pas de remplaçante pour rex : il a annoncé la taille et les pistes de CE fichier, et un
+	// lecteur qui reçoit un autre fichier s'arrête. Une version hors cache est retirée de rex.
+	if !s.root.st.res.originalCached(ctx, v) {
+		s.exclude(rf, "hors cache")
+		http.Error(w, "not cached", http.StatusServiceUnavailable)
+		return
+	}
 	if !v.sizeExact {
 		rf.f.learnSize(ctx) // résout aussi le lien (et la remplaçante si hors cache)
 		if v.sizeExact {
@@ -859,8 +876,8 @@ func (s *rexSource) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var resp *http.Response
 	for attempt := 0; attempt < 2; attempt++ {
 		u, err := s.root.st.res.resolve(ctx, v, attempt > 0)
-		if errors.Is(err, errNotCached) {
-			log.Printf("rex : %s hors cache, aucune version de remplacement", v.id)
+		if errors.Is(err, errNotCached) || s.root.st.res.substituted(v) {
+			s.exclude(rf, "hors cache (vu au déblocage)")
 			http.Error(w, "not cached", http.StatusServiceUnavailable)
 			return
 		}
@@ -989,4 +1006,59 @@ func contentType(name string) string {
 		return "video/mp4"
 	}
 	return "video/x-matroska"
+}
+
+// ---------------------------------------------------------------- versions hors cache
+
+// Durée pendant laquelle une version hors cache reste absente de rex avant d'être reproposée.
+const rexExcludeTTL = 6 * time.Hour
+
+type rexExcluded struct {
+	Until time.Time `json:"until"`
+	Dir   string    `json:"dir"`
+}
+
+func (s *rexSource) isExcluded(id string) bool {
+	s.emu.Lock()
+	defer s.emu.Unlock()
+	e, ok := s.excluded[id]
+	return ok && time.Now().Before(e.Until)
+}
+
+// exclude retire une version de rex (au prochain envoi) pour rexExcludeTTL.
+func (s *rexSource) exclude(rf rexFile, why string) {
+	s.emu.Lock()
+	e, had := s.excluded[rf.f.v.id]
+	already := had && time.Now().Before(e.Until)
+	s.excluded[rf.f.v.id] = rexExcluded{Until: time.Now().Add(rexExcludeTTL), Dir: rf.dir}
+	s.emu.Unlock()
+	if !already {
+		log.Printf("rex : %s %q %s : retirée de rex pour %s", rf.f.v.id, rf.f.v.name, why, rexExcludeTTL)
+	}
+	s.saveExcluded()
+	s.add([]string{rf.dir})
+}
+
+// expireExcluded repropose à rex les versions dont l'exclusion a pris fin.
+func (s *rexSource) expireExcluded() {
+	var dirs []string
+	s.emu.Lock()
+	for id, e := range s.excluded {
+		if time.Now().After(e.Until) {
+			dirs = append(dirs, e.Dir)
+			delete(s.excluded, id)
+		}
+	}
+	s.emu.Unlock()
+	if len(dirs) > 0 {
+		s.saveExcluded()
+		s.add(dirs)
+	}
+}
+
+func (s *rexSource) saveExcluded() {
+	s.emu.Lock()
+	b, _ := json.Marshal(s.excluded)
+	s.emu.Unlock()
+	_ = os.WriteFile(filepath.Join(s.cfg.stateDir, "excluded.json"), b, 0o600)
 }

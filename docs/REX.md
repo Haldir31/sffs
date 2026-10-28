@@ -18,8 +18,11 @@ d'une lecture. Le montage FUSE et Silo restent disponibles en parallèle.
   versions d'un même titre.
 - **Octets.** sffs écoute sur `SFFS_REX_LISTEN` (127.0.0.1 par défaut) et exige un jeton (`Bearer`)
   que rex reçoit à l'enregistrement. Une demande de rex est relayée chez AllDebrid avec la même
-  plage (`Range`), par `SFFS_DEBRID_PROXY` si défini. Une version qui n'est plus en cache est
-  remplacée par une version en cache, comme pour Silo.
+  plage (`Range`), par `SFFS_DEBRID_PROXY` si défini. Contrairement à Silo, une version qui n'est
+  plus en cache n'est **pas** remplacée en silence : rex a annoncé la taille et les pistes de ce
+  fichier, et un lecteur qui reçoit un autre fichier s'arrête (vu sur Apple TV). sffs répond
+  « indisponible » et retire la version de rex pour 6 heures (`SFFS_REX_STATE/excluded.json`).
+  `SFFS_CACHED_ONLY=1` évite la plupart de ces cas.
 - **Ordre des versions.** Une application Plex lance la première version d'un titre : le serveur
   ne choisit pas, il convertit celle qu'on lui demande. sffs envoie donc les versions de chaque
   titre de la plus compatible (1080p, puis 720p, puis 4K ; H.264 avant HEVC ; SDR ; son AC3/E-AC3/AAC
