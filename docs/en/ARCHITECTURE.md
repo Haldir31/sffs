@@ -119,6 +119,7 @@ The playback service is fixed to AllDebrid (`"service":"AD"` in `playbackURL`, `
 | 0005 | An uncached version falls back to another version of the same title |
 | 0006 | Analyse the source actually served (`user.sf.served`) when sffs substituted a version; after a failure, no new attempt for one hour |
 | 0007 | Estimated bitrate (size and runtime) for the lower version offered in a 4K title's quality menu: without it the Silo Apple TV app rejected the answer (`keyNotFound: bitrateKbps`); the entry is left out when no estimate is possible |
+| 0008 | A sffs version that is not cached is refused with the `source_not_cached` reason and a French message ("not available at AllDebrid right now") instead of `source_unreadable` ("empty or damaged file"); falling back to another version is unchanged |
 
 The patches change nothing outside `SILO_SF_ROOT`: other libraries behave as in official Silo.
 

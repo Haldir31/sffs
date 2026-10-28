@@ -1,0 +1,145 @@
+From 9b79203f6c129fb35a3bbeadb1ab39e260e5a4fd Mon Sep 17 00:00:00 2001
+From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
+Date: Wed, 28 Oct 2026 11:23:04 +0000
+Subject: [PATCH] =?UTF-8?q?sffs=20:=20une=20version=20hors=20cache=20n'est?=
+ =?UTF-8?q?=20plus=20annonc=C3=A9e=20comme=20ab=C3=AEm=C3=A9e?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Une version virtuelle sffs absente du cache du débrideur est lue comme illisible pour la
+lecture (patch 0005). Le planificateur répondait alors source_unreadable, et l'application web
+affichait « fichier vide ou endommagé, remplacez-le et relancez le scan ».
+
+Pour un fichier sous SILO_SF_ROOT, le code devient source_not_cached avec un message en
+français ; le repli sur une autre version du titre reste le même. L'application web l'affiche
+avec son propre titre ; un client qui ne connaît pas le code affiche le message du serveur.
+Les clients Jellyfin n'affichent pas de message du serveur.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01QiNjz8NPPdd1V8G79eXFA5
+---
+ internal/api/handlers/playback_v3.go    |  2 +-
+ internal/playback/plan_v3.go            |  5 ++++
+ internal/playback/sf_not_cached.go      | 10 +++++++
+ internal/playback/sf_not_cached_test.go | 35 +++++++++++++++++++++++++
+ web/src/player/playback-errors.ts       |  8 ++++++
+ 5 files changed, 59 insertions(+), 1 deletion(-)
+ create mode 100644 internal/playback/sf_not_cached.go
+ create mode 100644 internal/playback/sf_not_cached_test.go
+
+diff --git a/internal/api/handlers/playback_v3.go b/internal/api/handlers/playback_v3.go
+index e4e7d36f4..2247e8d7a 100644
+--- a/internal/api/handlers/playback_v3.go
++++ b/internal/api/handlers/playback_v3.go
+@@ -6744,7 +6744,7 @@ func terminalAllowsAlternateFileV3(terminal *playback.TerminalV3) bool {
+ 	}
+ 	switch terminal.Reason {
+ 	case terminalNoAlternateVersionV3, terminalHDRTranscodeUnsupportedV3, terminalSubtitleConversionUnsupportedV3, terminalBitratePolicyUnavailableV3,
+-		playback.TerminalSourceUnreadableV3:
++		playback.TerminalSourceUnreadableV3, playback.TerminalSourceNotCachedV3:
+ 		return true
+ 	default:
+ 		return false
+diff --git a/internal/playback/plan_v3.go b/internal/playback/plan_v3.go
+index 83ff9d817..967056512 100644
+--- a/internal/playback/plan_v3.go
++++ b/internal/playback/plan_v3.go
+@@ -8,6 +8,7 @@ import (
+ 	"time"
+ 
+ 	"github.com/Silo-Server/silo-server/internal/models"
++	"github.com/Silo-Server/silo-server/internal/sfvirtual"
+ 	"github.com/Silo-Server/silo-server/internal/tonemap"
+ )
+ 
+@@ -238,6 +239,10 @@ func PlanPlaybackV3(input PlannerInputV3) (result PlannerResultV3) {
+ 	// Answer before the bitrate-cap wrapper below, which would otherwise
+ 	// rename the refusal after a policy that has nothing to do with it.
+ 	if file.ProbeRejected() {
++		// Version virtuelle sffs : rejetée parce qu'elle n'est pas en cache chez le débrideur.
++		if sfvirtual.Under(file.FilePath) {
++			return terminalPlannerResultV3(TerminalSourceNotCachedV3, TerminalSourceNotCachedMessageV3, false)
++		}
+ 		return terminalPlannerResultV3(TerminalSourceUnreadableV3, TerminalSourceUnreadableMessageV3, false)
+ 	}
+ 	// No route plays an audio track FFmpeg cannot decode: conversion has no
+diff --git a/internal/playback/sf_not_cached.go b/internal/playback/sf_not_cached.go
+new file mode 100644
+index 000000000..bd48a34e8
+--- /dev/null
++++ b/internal/playback/sf_not_cached.go
+@@ -0,0 +1,10 @@
++package playback
++
++// TerminalSourceNotCachedV3 remplace source_unreadable pour une version virtuelle sffs : sffs la
++// déclare illisible pour la lecture quand elle n'est pas prête chez le débrideur. Le fichier n'est
++// pas abîmé ; il peut être lu plus tard, dès qu'une version est en cache.
++const TerminalSourceNotCachedV3 = "source_not_cached"
++
++// TerminalSourceNotCachedMessageV3 est le message affiché par les clients qui ne connaissent pas
++// le code (application web, applications natives : repli sur terminal.message).
++const TerminalSourceNotCachedMessageV3 = "Aucune version de ce titre n'est disponible chez AllDebrid pour le moment. Réessayez plus tard ou choisissez un autre titre."
+diff --git a/internal/playback/sf_not_cached_test.go b/internal/playback/sf_not_cached_test.go
+new file mode 100644
+index 000000000..a86dd8de5
+--- /dev/null
++++ b/internal/playback/sf_not_cached_test.go
+@@ -0,0 +1,35 @@
++package playback
++
++import (
++	"testing"
++	"time"
++
++	"github.com/Silo-Server/silo-server/internal/models"
++)
++
++// Une version sffs rejetée (hors cache chez le débrideur) n'est pas annoncée comme abîmée.
++func TestPlanPlaybackV3SffsRejectedIsNotCached(t *testing.T) {
++	t.Setenv("SILO_SF_ROOT", "/mnt/sffs")
++	req := validStartRequestV3()
++	settings := PlannerSettingsV3{TranscodeEnabled: true, Allow4KTranscode: true}
++	failedAt := time.Date(2026, time.October, 28, 12, 6, 46, 0, time.UTC)
++	rejected := func(path string) *models.MediaFile {
++		return &models.MediaFile{ID: 9, FilePath: path, ProbeFailedAt: &failedAt, SubtitleTracks: []models.SubtitleTrack{}}
++	}
++
++	sf := rejected("/mnt/sffs/films/Titre (2023) {tmdb-1}/Titre.mkv")
++	result := PlanPlaybackV3(PlannerInputV3{Request: req, RequestedFile: sf, EffectiveFile: sf, AudioTrackIndex: 0, Settings: settings, Registry: testTransformationRegistryV3()})
++	if result.Terminal == nil || result.Terminal.Reason != TerminalSourceNotCachedV3 || result.Terminal.Retryable {
++		t.Fatalf("sffs result = %s", ExplainPlannerResultV3(result))
++	}
++	if result.Terminal.Message != TerminalSourceNotCachedMessageV3 {
++		t.Fatalf("message = %q", result.Terminal.Message)
++	}
++
++	// Un fichier ordinaire rejeté reste source_unreadable.
++	plain := rejected("/library/films/Titre.mkv")
++	result = PlanPlaybackV3(PlannerInputV3{Request: req, RequestedFile: plain, EffectiveFile: plain, AudioTrackIndex: 0, Settings: settings, Registry: testTransformationRegistryV3()})
++	if result.Terminal == nil || result.Terminal.Reason != TerminalSourceUnreadableV3 {
++		t.Fatalf("plain result = %s", ExplainPlannerResultV3(result))
++	}
++}
+diff --git a/web/src/player/playback-errors.ts b/web/src/player/playback-errors.ts
+index 93b00ff29..a0e0c4e44 100644
+--- a/web/src/player/playback-errors.ts
++++ b/web/src/player/playback-errors.ts
+@@ -40,6 +40,14 @@ export function describePlanTerminal(terminal: TerminalV3): PlaybackPolicyErrorD
+         message:
+           "Silo couldn't read this file. It appears to be empty or damaged. Replace the file, then rescan the library.",
+       };
++    case "source_not_cached":
++      // sffs : aucune version prête chez le débrideur (le fichier n'est pas abîmé).
++      return {
++        title: "Indisponible pour le moment",
++        message:
++          terminal.message?.trim() ||
++          "Aucune version de ce titre n'est disponible chez AllDebrid pour le moment. Réessayez plus tard.",
++      };
+     case "source_metadata_incomplete":
+       return {
+         title: "This file hasn't finished scanning",
+-- 
+2.43.0
+
