@@ -17,12 +17,12 @@ func TestHealLoopRescansDeadRoot(t *testing.T) {
 	var scanned []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/libraries":
-			_ = json.NewEncoder(w).Encode([]siloLibrary{
-				{ID: 1, Name: "Films", Paths: []string{films}, ScanWarning: &dead},
-				{ID: 2, Name: "Séries", Paths: []string{series}},
-				{ID: 3, Name: "Autre", Paths: []string{"/ailleurs"}, ScanWarning: &dead},
-			})
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v2/libraries":
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": []siloLibrary{
+				{ID: "1", Name: "Films", Paths: []string{films}, ScanWarning: &dead},
+				{ID: "2", Name: "Séries", Paths: []string{series}},
+				{ID: "3", Name: "Autre", Paths: []string{"/ailleurs"}, ScanWarning: &dead},
+			}, "page": map[string]any{"has_more": false}})
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v2/scan":
 			var body map[string]string
 			_ = json.NewDecoder(r.Body).Decode(&body)
@@ -60,16 +60,20 @@ func TestEnsureLibrariesV2(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/libraries":
-			_, _ = w.Write([]byte("[]"))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v2/libraries":
+			if r.URL.Query().Get("cursor") == "" {
+				_, _ = w.Write([]byte(`{"items":[{"id":"1","paths":["/autre"]}],"page":{"has_more":true,"next_cursor":"c2"}}`))
+			} else {
+				_, _ = w.Write([]byte(`{"items":[],"page":{"has_more":false}}`))
+			}
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v2/libraries":
 			var b map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&b)
 			created = append(created, b)
 			_, _ = w.Write([]byte(`{"id":"7"}`))
-		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/libraries/7/providers":
-			_, _ = w.Write([]byte(`{"levels":{"movie":[{"capability_id":"nfo","enabled":true},{"capability_id":"tmdb","enabled":true}]}}`))
-		case r.Method == http.MethodPut && r.URL.Path == "/api/v1/libraries/7/providers":
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v2/libraries/7/providers":
+			_, _ = w.Write([]byte(`{"levels":[{"content_level":"movie","entries":[{"plugin_installation_id":"1","capability_id":"nfo","provider_slug":"nfo","priority":0,"enabled":true,"local":true},{"plugin_installation_id":"2","capability_id":"tmdb","provider_slug":"tmdb","priority":1,"enabled":true,"local":false}]}]}`))
+		case r.Method == http.MethodPut && r.URL.Path == "/api/v2/libraries/7/providers":
 			_ = json.NewDecoder(r.Body).Decode(&chainPut)
 			w.WriteHeader(http.StatusNoContent)
 		default:
@@ -86,8 +90,15 @@ func TestEnsureLibrariesV2(t *testing.T) {
 	if len(created) != 1 || created[0]["realtime_monitoring"] != false || created[0]["metadata_language"] != "fr" {
 		t.Fatalf("création : %v", created)
 	}
-	levels := chainPut["levels"].(map[string]any)["movie"].([]any)
+	lvl := chainPut["levels"].([]any)[0].(map[string]any)
+	if lvl["content_level"] != "movie" {
+		t.Fatalf("niveau envoyé : %v", lvl)
+	}
+	levels := lvl["entries"].([]any)
 	for _, e := range levels {
+		if _, ok := e.(map[string]any)["provider_slug"]; ok {
+			t.Fatalf("champ en lecture seule renvoyé : %v", e)
+		}
 		m := e.(map[string]any)
 		if want := m["capability_id"] != "nfo"; m["enabled"] != want {
 			t.Fatalf("chaîne envoyée : %v", levels)

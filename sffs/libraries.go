@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 )
@@ -20,7 +21,7 @@ import (
 //	SFFS_SILO_FILMS_NAME / _SERIES_NAME  noms des bibliothèques (défaut Films, Séries)
 
 type siloLibrary struct {
-	ID          int      `json:"id"`
+	ID          string   `json:"id"`
 	Name        string   `json:"name"`
 	Paths       []string `json:"paths"`
 	ScanWarning *string  `json:"scan_warning_code"`
@@ -63,8 +64,8 @@ func (s *siloNotifier) libraryLoop(series bool) {
 func (s *siloNotifier) ensureLibraries(want []libraryWanted, lang string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	var libs []siloLibrary
-	if err := s.api(ctx, http.MethodGet, "/api/v1/libraries", nil, &libs); err != nil {
+	libs, err := s.libraries(ctx)
+	if err != nil {
 		return err
 	}
 	have := map[string]bool{}
@@ -98,21 +99,55 @@ func (s *siloNotifier) ensureLibraries(want []libraryWanted, lang string) error 
 // disableNFO retire le fournisseur de métadonnées NFO de la chaîne de la bibliothèque : il n'y a
 // jamais de fichier .nfo à côté des fichiers sffs, et chaque recherche échouée encombre les journaux.
 func (s *siloNotifier) disableNFO(ctx context.Context, id string) error {
-	path := "/api/v1/libraries/" + id + "/providers"
+	path := "/api/v2/libraries/" + id + "/providers"
+	type entry struct {
+		PluginInstallationID string `json:"plugin_installation_id"`
+		CapabilityID         string `json:"capability_id"`
+		Priority             int    `json:"priority"`
+		Enabled              bool   `json:"enabled"`
+	}
+	type level struct {
+		ContentLevel string  `json:"content_level"`
+		Entries      []entry `json:"entries"`
+	}
 	var chain struct {
-		Levels map[string][]map[string]any `json:"levels"`
+		Levels []level `json:"levels"`
 	}
 	if err := s.api(ctx, http.MethodGet, path, nil, &chain); err != nil {
 		return err
 	}
-	for _, entries := range chain.Levels {
-		for _, e := range entries {
-			if e["capability_id"] == "nfo" {
-				e["enabled"] = false
+	for i := range chain.Levels {
+		for j := range chain.Levels[i].Entries {
+			if chain.Levels[i].Entries[j].CapabilityID == "nfo" {
+				chain.Levels[i].Entries[j].Enabled = false
 			}
 		}
 	}
 	return s.api(ctx, http.MethodPut, path, chain, nil)
+}
+
+// libraries liste les bibliothèques de Silo (API v2, toutes les pages).
+func (s *siloNotifier) libraries(ctx context.Context) ([]siloLibrary, error) {
+	var all []siloLibrary
+	path := "/api/v2/libraries"
+	for range 100 {
+		var page struct {
+			Items []siloLibrary `json:"items"`
+			Page  struct {
+				HasMore    bool   `json:"has_more"`
+				NextCursor string `json:"next_cursor"`
+			} `json:"page"`
+		}
+		if err := s.api(ctx, http.MethodGet, path, nil, &page); err != nil {
+			return nil, err
+		}
+		all = append(all, page.Items...)
+		if !page.Page.HasMore || page.Page.NextCursor == "" {
+			break
+		}
+		path = "/api/v2/libraries?cursor=" + url.QueryEscape(page.Page.NextCursor)
+	}
+	return all, nil
 }
 
 func (s *siloNotifier) api(ctx context.Context, method, path string, in, out any) error {
@@ -164,8 +199,8 @@ func (s *siloNotifier) healLoop(every time.Duration) {
 			continue
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		var libs []siloLibrary
-		if err := s.api(ctx, http.MethodGet, "/api/v1/libraries", nil, &libs); err != nil {
+		libs, err := s.libraries(ctx)
+		if err != nil {
 			cancel()
 			continue
 		}
