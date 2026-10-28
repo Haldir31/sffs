@@ -57,10 +57,11 @@ The variables are listed in the [French page](../REX.md#variables).
 
 ## Known limits
 
-- rex does not take new technical info for a file it already holds (only its chapters): the real
-  probe made on first playback only serves files created later (rex rebuilt, source registered
-  again). Files therefore keep the built info: TMDB duration (progress bar right within minutes),
-  tracks guessed from the release name (no embedded subtitles shown, approximate audio languages).
+- Official rex does not take new technical info for a file it already holds (only its chapters):
+  files keep the built info (TMDB duration, tracks guessed from the name, no embedded subtitles).
+  Patch `rex/patches/0001` lifts this: build rex with `rex/build.sh` and run it with
+  `REX_FEED_REPROBE=sffs`. A version is then rebuilt from its real probe on first playback (exact
+  duration, every track and subtitle), on the same key.
 - A replaced (uncached) version is probed as served; if the replacement changes later, the probe is
   redone on the next playback.
 - A file removed from sffs goes to rex's trash, as in Plex.

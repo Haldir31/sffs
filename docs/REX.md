@@ -77,11 +77,12 @@ identifie quelques centaines de fichiers par minute au premier remplissage.
 
 ## Limites connues
 
-- rex ne reprend pas les infos techniques d'un fichier déjà connu (seulement ses chapitres) : la
-  vraie analyse faite à la première lecture ne sert qu'aux fichiers créés ensuite (rex recréé,
-  source réenregistrée). Les fichiers gardent donc les infos fabriquées : durée TMDB (barre de
-  progression correcte à quelques minutes près), pistes déduites du nom de la release (pas de
-  sous-titres intégrés visibles, langues audio approximatives).
+- rex officiel ne reprend pas les infos techniques d'un fichier déjà connu (seulement ses
+  chapitres) : la vraie analyse de la première lecture n'y change rien, et les fichiers gardent les
+  infos fabriquées (durée TMDB, pistes déduites du nom, pas de sous-titres intégrés). Le patch
+  `rex/patches/0001` lève cette limite : construire rex avec `rex/build.sh` et le lancer avec
+  `REX_FEED_REPROBE=sffs`. Une version est alors reconstruite avec sa vraie analyse dès sa
+  première lecture (durée exacte, toutes les pistes et sous-titres), sans changer de clé.
 - Une version remplacée (hors cache) est analysée telle qu'elle est servie ; si la remplaçante
   change ensuite, l'analyse est refaite à la lecture suivante.
 - Un fichier retiré de sffs part à la corbeille de rex, comme dans Plex.

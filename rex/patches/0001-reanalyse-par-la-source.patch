@@ -1,0 +1,184 @@
+From 570059f1d42a335b241c5921c3c491c50134334a Mon Sep 17 00:00:00 2001
+From: haldir <haldir@localhost>
+Date: Wed, 28 Oct 2026 19:50:14 +0000
+Subject: [PATCH] feed: a source named in REX_FEED_REPROBE may change a file's
+ probe
+
+A source whose files can change under their id (sffs serves another release
+when the listed one left the debrid cache, and builds its first probe from the
+release name until a real ffprobe runs on first playback) sends a new probe
+digest with its media_info. The version is rebuilt from it (refill_version):
+ids, part key, file, size, bookkeeping and the other versions are kept; the
+row's duration follows its first version. Off unless REX_FEED_REPROBE names
+the source (comma list, or *).
+---
+ rust/src/runtime/feed.rs | 63 +++++++++++++++++++++++++++++++++++++++-
+ rust/src/runtime/scan.rs | 56 +++++++++++++++++++++++++++++++++++
+ 2 files changed, 118 insertions(+), 1 deletion(-)
+
+diff --git a/rust/src/runtime/feed.rs b/rust/src/runtime/feed.rs
+index fbdbd1c5..3c78483c 100644
+--- a/rust/src/runtime/feed.rs
++++ b/rust/src/runtime/feed.rs
+@@ -235,6 +235,17 @@ fn display_fields(display: &Map<String, Value>, source: &Source) -> Result<Map<S
+ 
+ /// The size ffprobe read off a file (`format.size`, a string in its JSON), for an item sent
+ /// without `size`: the probe is required anyway. None for a playlist, whose size is its text's.
++/// sffs fork: whether `source` may change a file under its id, so a new probe digest
++/// rebuilds the version (REX_FEED_REPROBE: source names separated by commas, or `*`).
++/// A source such as sffs serves another release when the one it listed left the
++/// debrid cache, and its first probe is built from the release name until a real
++/// ffprobe runs on first playback.
++fn reprobe_source(source: &str) -> bool {
++    std::env::var("REX_FEED_REPROBE")
++        .ok()
++        .is_some_and(|value| value.split(',').map(str::trim).any(|name| name == "*" || name == source))
++}
++
+ fn probed_size(value: &Value) -> Option<u64> {
+     let format = value.pointer("/media_info/format")?;
+     if format.get("format_name").and_then(Value::as_str) == Some("hls") {
+@@ -2339,8 +2350,13 @@ impl Runtime {
+                 changed = true;
+             }
+         }
++        // sffs fork: a probe whose digest changed, from a source allowed to change its files
++        // (REX_FEED_REPROBE), rebuilds that version below instead of only taking the digest.
++        let mut reprobe = false;
+         if let (Some(probe), Some(_)) = (&item.probe, &item.media_info) {
+-            if row.pointer(&format!("/Media/{index}/_probe")).and_then(Value::as_str) != Some(probe.as_str()) {
++            let previous = row.pointer(&format!("/Media/{index}/_probe")).and_then(Value::as_str);
++            if previous != Some(probe.as_str()) {
++                reprobe = previous.is_some() && reprobe_source(source);
+                 if let Some(media) = self.catalog.get_mut(key).and_then(|row| row.get_mut("Media")).and_then(|media| media.get_mut(index)).and_then(Value::as_object_mut) {
+                     media.insert("_probe".to_string(), json!(probe));
+                     changed = true;
+@@ -2491,6 +2507,13 @@ impl Runtime {
+                 probed.push((key.to_string(), probe.clone()));
+                 changed = true;
+             }
++        } else if reprobe {
++            if let Some(probe) = &item.media_info {
++                if self.refill_version(key, index, probe) {
++                    info!("FEED {source} reprobed {key} version {index} for {}", item.id);
++                    changed = true;
++                }
++            }
+         }
+         if let Some(display) = &item.display {
+             changed |= self.redress(key, display);
+@@ -3489,6 +3512,44 @@ mod tests {
+         let _ = std::fs::remove_dir_all(dir);
+     }
+ 
++    #[test]
++    fn a_reprobe_source_rebuilds_only_the_version_whose_probe_changed() {
++        // sffs fork: REX_FEED_REPROBE names the sources whose files may change under their id.
++        std::env::set_var("REX_FEED_REPROBE", "reprobe-test");
++        let dir = work("reprobe");
++        let (shared, key) = runtime_with_episode(&dir);
++        let mut guard = shared.lock().unwrap();
++        guard.catalog.get_mut(&key).unwrap()["Media"] = json!([
++            {"id": 1100, "_source": "reprobe-test", "_sid": "one", "_path": "one.mkv", "_folder": "", "_probe": "sf:a",
++             "Part": [{"id": 11, "key": "/library/parts/11/1/file.mkv", "file": "/shows/one.mkv", "size": 1000}]},
++            {"id": 2200, "_source": "reprobe-test", "_sid": "two", "_path": "two.mkv", "_folder": "", "_probe": "sf:b",
++             "Part": [{"id": 22, "key": "/library/parts/22/1/file.mkv", "file": "/shows/two.mkv", "size": 2000}]}
++        ]);
++        let first = guard.catalog.get(&key).unwrap().pointer("/Media/0").cloned();
++        let source = Source::register("reprobe-test", &json!({"url": "http://127.0.0.1:9"})).unwrap();
++        let real = json!({"format": {"format_name": "matroska,webm", "duration": "3600.000000", "bit_rate": "8000000"},
++            "streams": [{"index": 0, "codec_type": "video", "codec_name": "hevc", "width": 3840, "height": 2160},
++                        {"index": 1, "codec_type": "audio", "codec_name": "eac3", "channels": 6, "tags": {"language": "fre"}},
++                        {"index": 2, "codec_type": "subtitle", "codec_name": "subrip", "tags": {"language": "fre"}}]});
++        let pushed = json!({"id": "two", "path": "two.mkv", "file": "/shows/two.mkv", "folder": "", "probe": "ff:real", "media_info": real});
++        let mut probed = Vec::new();
++        let item = Item::parse(&source, &pushed).unwrap();
++        assert!(guard.feed_update_row(&key, "reprobe-test", &item, false, &mut probed));
++        let row = guard.catalog.get(&key).unwrap().clone();
++        assert_eq!(row.pointer("/Media/1/duration"), Some(&json!(3600000)), "the version takes the real probe");
++        assert_eq!(row.pointer("/Media/1/id"), Some(&json!(2200)));
++        assert_eq!(row.pointer("/Media/1/Part/0/id"), Some(&json!(22)), "part id kept: watch state and keys survive");
++        assert_eq!(row.pointer("/Media/1/_sid"), Some(&json!("two")));
++        assert_eq!(row.pointer("/Media/1/_probe"), Some(&json!("ff:real")));
++        assert_eq!(row.pointer("/Media/0").cloned(), first, "the other version is untouched");
++        assert!(probed.is_empty());
++        // Same digest again: nothing to rebuild.
++        assert!(!guard.feed_update_row(&key, "reprobe-test", &item, false, &mut probed));
++        drop(guard);
++        std::env::remove_var("REX_FEED_REPROBE");
++        let _ = std::fs::remove_dir_all(dir);
++    }
++
+     #[test]
+     fn chapters_reach_metadata_and_play_queues_only_when_requested() {
+         let dir = work("chapter-routes");
+diff --git a/rust/src/runtime/scan.rs b/rust/src/runtime/scan.rs
+index 73ef30c4..27c4c8e5 100644
+--- a/rust/src/runtime/scan.rs
++++ b/rust/src/runtime/scan.rs
+@@ -923,6 +923,62 @@ impl Runtime {
+ 
+     /// Rows added before their file was probed get their Media from the probe, keeping
+     /// their ids.
++    /// sffs fork: rebuild version `index` of row `key` from a new probe, keeping its ids,
++    /// part key, file, size and bookkeeping (`_` fields, chapters), and every other version.
++    /// The row's duration follows its first version. Answers whether anything changed.
++    pub(super) fn refill_version(&mut self, key: &str, index: usize, probe: &Value) -> bool {
++        let Some(old) = self.catalog.get(key).and_then(|row| row.get("Media")).and_then(Value::as_array).and_then(|media| media.get(index)).cloned() else {
++            return false;
++        };
++        let part = old.get("Part").and_then(Value::as_array).and_then(|parts| parts.first()).cloned().unwrap_or_default();
++        let file = part.get("file").and_then(Value::as_str).unwrap_or_default().to_string();
++        let mut media = mediainfo::build_media(
++            probe,
++            old.get("id").and_then(Value::as_i64).unwrap_or(0),
++            part.get("id").and_then(Value::as_i64).unwrap_or(0),
++            part.get("key").and_then(Value::as_str).unwrap_or_default(),
++            &file,
++            part.get("size").and_then(Value::as_i64).unwrap_or(0),
++            Some(&extension(&file)),
++        );
++        if let Some(prefs) = &self.track_prefs {
++            mediainfo::select_media_tracks(&mut media, prefs);
++        }
++        if let (Some(fresh), Some(old)) = (media.as_object_mut(), old.as_object()) {
++            for (name, value) in old {
++                if name.starts_with('_') {
++                    fresh.insert(name.clone(), value.clone());
++                }
++            }
++            if let (Some(fresh_part), Some(old_part)) = (
++                fresh.get_mut("Part").and_then(Value::as_array_mut).and_then(|parts| parts.first_mut()).and_then(Value::as_object_mut),
++                part.as_object(),
++            ) {
++                for (name, value) in old_part {
++                    if name.starts_with('_') && name != "_trackChosen" {
++                        fresh_part.insert(name.clone(), value.clone());
++                    }
++                }
++            }
++        }
++        if media == old {
++            return false;
++        }
++        let duration = media.get("duration").cloned().unwrap_or(json!(0));
++        if let Some(object) = self.catalog.get_mut(key).and_then(Value::as_object_mut) {
++            if index == 0 {
++                object.insert("duration".to_string(), duration);
++            }
++            if let Some(slot) = object.get_mut("Media").and_then(Value::as_array_mut).and_then(|media| media.get_mut(index)) {
++                *slot = media;
++            }
++        }
++        if let Some(row) = self.catalog.get(key).cloned() {
++            self.push_timeline_entry(&row, 5, None, None, None, None);
++        }
++        true
++    }
++
+     pub(super) fn fill_probes(&mut self, probed: Vec<(String, Value)>) -> usize {
+         let mut filled = 0;
+         for (key, probe) in probed {
+-- 
+2.55.0
+
