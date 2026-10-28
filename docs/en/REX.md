@@ -25,8 +25,8 @@ alongside.
   first (4K REMUX) for players that need no conversion. The order is set when rex creates the title.
 - **No guard.** rex analyzes no file: only playback (or a conversion) reads bytes.
 - **Technical info.** rex needs an ffprobe result per file. At first sffs builds one from what
-  StreamFusion parses out of the release name (codecs, resolution, HDR, languages), with no duration
-  or real tracks. On first playback sffs probes the source actually served with `ffprobe` (format,
+  StreamFusion parses out of the release name (codecs, resolution, HDR, languages), with the TMDB
+  duration (`SFFS_TMDB_KEY`, kept in `SFFS_REX_STATE/runtimes.json`) and no real tracks. On first playback sffs probes the source actually served with `ffprobe` (format,
   tracks, subtitles, chapters, duration), keeps the result in `SFFS_REX_STATE/probes/` and updates
   the file in rex on the same key (watch history kept). The size is sent only once known exactly.
 
@@ -55,8 +55,10 @@ The variables are listed in the [French page](../REX.md#variables).
 
 ## Known limits
 
-- Before its first playback a file has no duration and no real track list: a Plex app may pick a
-  needless conversion or show a wrong progress bar.
+- rex does not take new technical info for a file it already holds (only its chapters): the real
+  probe made on first playback only serves files created later (rex rebuilt, source registered
+  again). Files therefore keep the built info: TMDB duration (progress bar right within minutes),
+  tracks guessed from the release name (no embedded subtitles shown, approximate audio languages).
 - A replaced (uncached) version is probed as served; if the replacement changes later, the probe is
   redone on the next playback.
 - A file removed from sffs goes to rex's trash, as in Plex.

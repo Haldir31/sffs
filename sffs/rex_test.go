@@ -14,7 +14,7 @@ func TestSynthMediaInfo(t *testing.T) {
 		Format  map[string]any   `json:"format"`
 		Streams []map[string]any `json:"streams"`
 	}
-	if err := json.Unmarshal(synthMediaInfo(pj), &mi); err != nil {
+	if err := json.Unmarshal(synthMediaInfo(pj, 0), &mi); err != nil {
 		t.Fatal(err)
 	}
 	if mi.Format["format_name"] != "matroska,webm" {
@@ -49,7 +49,7 @@ func TestSynthMediaInfoMinimal(t *testing.T) {
 	var mi struct {
 		Streams []map[string]any `json:"streams"`
 	}
-	if err := json.Unmarshal(synthMediaInfo([]byte(`{}`)), &mi); err != nil {
+	if err := json.Unmarshal(synthMediaInfo([]byte(`{}`), 0), &mi); err != nil {
 		t.Fatal(err)
 	}
 	if len(mi.Streams) != 2 || mi.Streams[1]["tags"].(map[string]any)["language"] != "und" {
@@ -136,4 +136,22 @@ func TestContentType(t *testing.T) {
 	if contentType("a.MP4") != "video/mp4" || contentType("a.mkv") != "video/x-matroska" {
 		t.Error("type de contenu")
 	}
+}
+
+func TestSynthDuration(t *testing.T) {
+	var mi struct {
+		Format map[string]any `json:"format"`
+	}
+	_ = json.Unmarshal(synthMediaInfo([]byte(`{}`), 8880), &mi)
+	if mi.Format["duration"] != "8880.000000" {
+		t.Errorf("durée %v", mi.Format["duration"])
+	}
+}
+
+func TestTMDBRuntimesNil(t *testing.T) {
+	var r *tmdbRuntimes
+	if r.movie(1) != 0 || r.episode(1, 1, 1) != 0 {
+		t.Error("sans clé TMDB, aucune durée")
+	}
+	r.save()
 }

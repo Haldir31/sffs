@@ -140,7 +140,7 @@ func rexPath(top string, parts ...string) string {
 // item construit l'élément rex. withInfo : joindre media_info (sinon seule son empreinte part).
 func (s *rexSource) item(rf rexFile, withInfo bool) rexItem {
 	v := rf.f.v
-	info, digest := s.mediaInfo(v)
+	info, digest := s.mediaInfo(rf)
 	var pi probeInfo
 	_ = json.Unmarshal(v.probeJSON, &pi)
 	it := rexItem{ID: v.id, Path: rf.path, IDs: &rexIDs{TMDB: rf.tmdb}, Name: pi.Release, Release: pi.Release,
@@ -174,12 +174,21 @@ func itemDigest(it rexItem) string {
 }
 
 // mediaInfo renvoie l'analyse ffprobe de la version (réelle si elle a déjà été lue, sinon
-// fabriquée d'après le nom de la release) et son empreinte.
-func (s *rexSource) mediaInfo(v *version) (json.RawMessage, string) {
+// fabriquée d'après le nom de la release, avec la durée TMDB) et son empreinte.
+func (s *rexSource) mediaInfo(rf rexFile) (json.RawMessage, string) {
+	v := rf.f.v
 	if b := s.realProbe(v.id); b != nil {
 		return b, "ff:" + shortHash(b)
 	}
-	b := synthMediaInfo(v.probeJSON)
+	var minutes int
+	if s.runtimes != nil && rf.tmdb != 0 {
+		if v.mediaType == "series" {
+			minutes = s.runtimes.episode(rf.tmdb, v.season, v.episode)
+		} else {
+			minutes = s.runtimes.movie(rf.tmdb)
+		}
+	}
+	b := synthMediaInfo(v.probeJSON, minutes*60)
 	return b, "sf:" + shortHash(b)
 }
 
@@ -203,8 +212,9 @@ var langISO = map[string]string{
 
 // synthMediaInfo fabrique un résultat au format ffprobe (-show_format -show_streams) à partir du
 // probe sffs : une piste vidéo et une piste audio par langue connue (« multi » : français et
-// anglais). Pas de durée : rex et Plex l'apprennent à la première lecture (analyse réelle).
-func synthMediaInfo(probeJSON []byte) json.RawMessage {
+// anglais). Durée : celle de TMDB (seconds, 0 si inconnue), remplacée par la vraie à la première
+// lecture ; sans elle, les applications Plex n'affichent ni durée ni barre de progression.
+func synthMediaInfo(probeJSON []byte, seconds int) json.RawMessage {
 	var pi probeInfo
 	_ = json.Unmarshal(probeJSON, &pi)
 	format := containerFormat[pi.Container]
@@ -255,7 +265,11 @@ func synthMediaInfo(probeJSON []byte) json.RawMessage {
 			"channels": ch, "tags": map[string]string{"language": l}, "disposition": map[string]int{"default": b2i(i == 0)}}
 		streams = append(streams, a)
 	}
-	b, _ := json.Marshal(map[string]any{"format": map[string]any{"format_name": format, "nb_streams": len(streams)}, "streams": streams})
+	f := map[string]any{"format_name": format, "nb_streams": len(streams)}
+	if seconds > 0 {
+		f["duration"] = fmt.Sprintf("%d.000000", seconds)
+	}
+	b, _ := json.Marshal(map[string]any{"format": f, "streams": streams})
 	return b
 }
 
@@ -392,6 +406,8 @@ type rexSource struct {
 	digest  bool                         // rex accepte les empreintes (features: probe_digest)
 	sent    map[string]map[string]string // dossier -> id -> empreinte de l'élément envoyé
 
+	runtimes *tmdbRuntimes // durées TMDB des fichiers pas encore analysés (nil sans clé TMDB)
+
 	pmu     sync.Mutex
 	probes  map[string]storedProbe
 	probing map[string]bool
@@ -400,9 +416,13 @@ type rexSource struct {
 var rexFeed *rexSource // nil : source rex coupée
 
 func newRexSource(cfg rexConfig, root *rootNode) *rexSource {
-	return &rexSource{cfg: cfg, root: root, http: &http.Client{Timeout: 15 * time.Minute},
+	s := &rexSource{cfg: cfg, root: root, http: &http.Client{Timeout: 15 * time.Minute},
 		pending: map[string]bool{}, full: true, sent: map[string]map[string]string{},
 		probes: map[string]storedProbe{}, probing: map[string]bool{}}
+	if root != nil && root.st != nil && root.st.cfg.tmdbKey != "" {
+		s.runtimes = newTMDBRuntimes(root.st.cfg.tmdbKey, filepath.Join(cfg.stateDir, "runtimes.json"))
+	}
+	return s
 }
 
 // add note des dossiers modifiés ("films/<dossier>", "series/<dossier>").
@@ -645,6 +665,7 @@ func (s *rexSource) snapshot() error {
 	s.mu.Lock()
 	s.sent = sent
 	s.mu.Unlock()
+	s.runtimes.save()
 	log.Printf("rex : envoi complet : %d fichiers (%d créés, %d mis à jour, %d analyses demandées, %d refusés) en %s",
 		len(all), created, updated, wanted, rejected, time.Since(t0).Round(time.Second))
 	return nil
@@ -749,6 +770,7 @@ func (s *rexSource) flush() error {
 		}
 	}
 	s.mu.Unlock()
+	s.runtimes.save()
 	if len(upserts)+len(gone) > 0 {
 		log.Printf("rex : %d fichiers envoyés, %d retirés (%d dossiers)", len(upserts), len(gone), len(dirs))
 	}

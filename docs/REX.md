@@ -30,7 +30,7 @@ d'une lecture. Le montage FUSE et Silo restent disponibles en parallèle.
   des octets.
 - **Infos techniques.** rex exige un résultat ffprobe par fichier. Au départ, sffs le fabrique
   d'après ce que StreamFusion déduit du nom de la release (codecs, résolution, HDR, langues), sans
-  durée ni pistes réelles. À la première lecture, sffs analyse la source réellement servie avec
+  pistes réelles, avec la durée de TMDB (`SFFS_TMDB_KEY`, gardée dans `SFFS_REX_STATE/runtimes.json`). À la première lecture, sffs analyse la source réellement servie avec
   `ffprobe` (formats, pistes, sous-titres, chapitres, durée), garde le résultat dans
   `SFFS_REX_STATE/probes/` et met le fichier à jour dans rex, sur la même clé (historique de
   visionnage conservé). La taille n'est envoyée qu'une fois connue exactement.
@@ -74,8 +74,11 @@ identifie quelques centaines de fichiers par minute au premier remplissage.
 
 ## Limites connues
 
-- Avant sa première lecture, un fichier n'a ni durée ni liste réelle de pistes : une application
-  Plex peut choisir une conversion inutile, ou mal afficher la barre de progression.
+- rex ne reprend pas les infos techniques d'un fichier déjà connu (seulement ses chapitres) : la
+  vraie analyse faite à la première lecture ne sert qu'aux fichiers créés ensuite (rex recréé,
+  source réenregistrée). Les fichiers gardent donc les infos fabriquées : durée TMDB (barre de
+  progression correcte à quelques minutes près), pistes déduites du nom de la release (pas de
+  sous-titres intégrés visibles, langues audio approximatives).
 - Une version remplacée (hors cache) est analysée telle qu'elle est servie ; si la remplaçante
   change ensuite, l'analyse est refaite à la lecture suivante.
 - Un fichier retiré de sffs part à la corbeille de rex, comme dans Plex.
