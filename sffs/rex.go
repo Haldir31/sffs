@@ -14,6 +14,12 @@ package main
 //	SFFS_REX_STATE       dossier des analyses ffprobe faites à la lecture (défaut ~/.cache/sffs-rex)
 //	SFFS_REX_PROBE       0 : pas d'analyse ffprobe à la première lecture (défaut 1)
 //	SFFS_FFPROBE         binaire ffprobe (défaut ffprobe)
+//	SFFS_REX_ORDER       ordre des versions d'un titre : compat (défaut) ou quality
+//
+// Ordre des versions : une application Plex lance la première version d'un titre (le serveur ne
+// choisit pas, il convertit celle demandée), et rex les range dans leur ordre d'arrivée. sffs
+// envoie donc les versions de chaque titre de la plus compatible (1080p H.264, son AC3/AAC, SDR)
+// à la moins compatible (compat), ou de la meilleure à la moins bonne (quality : 4K REMUX d'abord).
 //
 // Infos techniques : rex exige pour chaque fichier un résultat au format ffprobe. Faute de
 // mieux, sffs le fabrique d'après ce que StreamFusion déduit du nom de la release (codecs,
@@ -48,8 +54,8 @@ import (
 )
 
 type rexConfig struct {
-	url, source, listen, bytesURL, token, stateDir, ffprobe string
-	probe                                                   bool
+	url, source, listen, bytesURL, token, stateDir, ffprobe, order string
+	probe                                                          bool
 }
 
 func loadRexConfig() (rexConfig, error) {
@@ -60,6 +66,7 @@ func loadRexConfig() (rexConfig, error) {
 		ffprobe:  envOr("SFFS_FFPROBE", "ffprobe"),
 		probe:    os.Getenv("SFFS_REX_PROBE") != "0",
 		stateDir: os.Getenv("SFFS_REX_STATE"),
+		order:    envOr("SFFS_REX_ORDER", "compat"),
 	}
 	if c.url == "" {
 		return c, nil
@@ -581,12 +588,22 @@ func (s *rexSource) snapshot() error {
 	for _, lst := range byDir {
 		all = append(all, lst...)
 	}
-	sort.Slice(all, func(i, j int) bool { return all[i].path < all[j].path })
+	s.sortFiles(all)
 	if len(all) == 0 {
 		return errors.New("arborescence vide, rien envoyé")
 	}
 	session := time.Now().UTC().Format(time.RFC3339Nano)
 	byID := map[string]rexFile{}
+	// Rang de chaque version dans son titre (0 = la préférée), pour l'envoi par vagues.
+	rank := make(map[string]int, len(all))
+	prev, n := "", 0
+	for _, rf := range all {
+		if t := rexTitle(rf); t != prev {
+			prev, n = t, 0
+		}
+		rank[rf.f.v.id] = n
+		n++
+	}
 	sent := map[string]map[string]string{}
 	var created, updated, wanted, rejected int
 	for part, i := 0, 0; i < len(all); part, i = part+1, i+rexChunk {
@@ -612,7 +629,7 @@ func (s *rexSource) snapshot() error {
 		created, updated, rejected = created+r.Created, updated+r.Updated, rejected+len(r.Rejected)
 		if len(r.Wants) > 0 {
 			wanted += len(r.Wants)
-			if err := s.sendWanted(r.Wants, byID); err != nil {
+			if err := s.sendWanted(r.Wants, byID, rank); err != nil {
 				return err
 			}
 		}
@@ -634,20 +651,33 @@ func (s *rexSource) snapshot() error {
 }
 
 // sendWanted renvoie, avec leur media_info, les éléments dont rex ne connaît pas l'empreinte.
-func (s *rexSource) sendWanted(ids []string, byID map[string]rexFile) error {
-	for i := 0; i < len(ids); i += rexChunk {
-		var items []rexItem
-		for _, id := range ids[i:min(i+rexChunk, len(ids))] {
-			if rf, ok := byID[id]; ok {
-				items = append(items, s.item(rf, true))
+// rex range les versions d'un titre dans leur ordre de création, mais ne suit pas l'ordre des
+// éléments d'une même requête : les versions partent donc par vagues (la préférée de chaque titre,
+// puis la deuxième, etc.), une requête ne mêlant jamais deux rangs.
+func (s *rexSource) sendWanted(ids []string, byID map[string]rexFile, rank map[string]int) error {
+	rounds := map[int][]string{}
+	maxRank := 0
+	for _, id := range ids {
+		r := rank[id]
+		rounds[r] = append(rounds[r], id)
+		maxRank = max(maxRank, r)
+	}
+	for r := 0; r <= maxRank; r++ {
+		lst := rounds[r]
+		for i := 0; i < len(lst); i += rexChunk {
+			var items []rexItem
+			for _, id := range lst[i:min(i+rexChunk, len(lst))] {
+				if rf, ok := byID[id]; ok {
+					items = append(items, s.item(rf, true))
+				}
 			}
-		}
-		if len(items) == 0 {
-			continue
-		}
-		var r rexUpsertResult
-		if _, err := s.api(http.MethodPost, "/rex/feed/"+url.PathEscape(s.cfg.source)+"/items", map[string]any{"items": items}, &r); err != nil {
-			return err
+			if len(items) == 0 {
+				continue
+			}
+			var res rexUpsertResult
+			if _, err := s.api(http.MethodPost, "/rex/feed/"+url.PathEscape(s.cfg.source)+"/items", map[string]any{"items": items}, &res); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -666,6 +696,9 @@ func (s *rexSource) flush() error {
 	s.mu.Unlock()
 
 	byDir := s.files(dirs)
+	for _, lst := range byDir {
+		s.sortFiles(lst)
+	}
 	var upserts []rexItem
 	var gone []string
 	next := map[string]map[string]string{}
@@ -852,4 +885,76 @@ func (s *rexSource) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		!errors.Is(err, syscall.EPIPE) && !errors.Is(err, syscall.ECONNRESET) {
 		log.Printf("rex : flux %s interrompu : %v", v.id, err)
 	}
+}
+
+// ---------------------------------------------------------------- ordre des versions
+
+// compatRank : plus petit = plus facile à lire directement par une application Plex (navigateur
+// compris) : 1080p puis 720p puis 4K, H.264 puis HEVC, son AC3/E-AC3/AAC puis DTS/TrueHD, SDR.
+func compatRank(pi probeInfo) [4]int {
+	res := map[string]int{"1080p": 0, "720p": 1, "2160p": 2}[pi.Resolution]
+	if _, ok := map[string]bool{"1080p": true, "720p": true, "2160p": true}[pi.Resolution]; !ok {
+		res = 3
+	}
+	video := map[string]int{"h264": 0, "hevc": 1}[pi.CodecVideo]
+	if pi.CodecVideo != "h264" && pi.CodecVideo != "hevc" {
+		video = 2
+	}
+	audio := 1
+	switch pi.CodecAudio {
+	case "ac3", "eac3", "aac", "mp3":
+		audio = 0
+	case "":
+		audio = 2
+	}
+	return [4]int{res, video, b2i(pi.HDR || pi.DolbyVision), audio}
+}
+
+// qualityRank : plus petit = meilleure qualité (4K, REMUX, HDR d'abord).
+func qualityRank(pi probeInfo, remux bool) [4]int {
+	res := map[string]int{"2160p": 0, "1080p": 1, "720p": 2}[pi.Resolution]
+	if _, ok := map[string]bool{"1080p": true, "720p": true, "2160p": true}[pi.Resolution]; !ok {
+		res = 3
+	}
+	return [4]int{res, b2i(!remux), b2i(!pi.HDR), 0}
+}
+
+func lessRank(a, b [4]int) int {
+	for i := range a {
+		if a[i] != b[i] {
+			return a[i] - b[i]
+		}
+	}
+	return 0
+}
+
+// rexTitle : le titre d'un fichier, dossier (+ saison et épisode pour une série).
+func rexTitle(rf rexFile) string {
+	v := rf.f.v
+	if v.mediaType == "series" {
+		return fmt.Sprintf("%s|%04d|%04d", rf.dir, v.season, v.episode)
+	}
+	return rf.dir
+}
+
+// sortFiles classe par titre (dossier, saison), puis par ordre des versions, puis par chemin.
+func (s *rexSource) sortFiles(files []rexFile) {
+	rank := func(rf rexFile) [4]int {
+		var pi probeInfo
+		_ = json.Unmarshal(rf.f.v.probeJSON, &pi)
+		if s.cfg.order == "quality" {
+			return qualityRank(pi, rf.f.v.remux)
+		}
+		return compatRank(pi)
+	}
+	sort.SliceStable(files, func(i, j int) bool {
+		ti, tj := rexTitle(files[i]), rexTitle(files[j])
+		if ti != tj {
+			return ti < tj
+		}
+		if c := lessRank(rank(files[i]), rank(files[j])); c != 0 {
+			return c < 0
+		}
+		return files[i].path < files[j].path
+	})
 }

@@ -20,6 +20,12 @@ d'une lecture. Le montage FUSE et Silo restent disponibles en parallèle.
   que rex reçoit à l'enregistrement. Une demande de rex est relayée chez AllDebrid avec la même
   plage (`Range`), par `SFFS_DEBRID_PROXY` si défini. Une version qui n'est plus en cache est
   remplacée par une version en cache, comme pour Silo.
+- **Ordre des versions.** Une application Plex lance la première version d'un titre : le serveur
+  ne choisit pas, il convertit celle qu'on lui demande. sffs envoie donc les versions de chaque
+  titre de la plus compatible (1080p, puis 720p, puis 4K ; H.264 avant HEVC ; SDR ; son AC3/E-AC3/AAC
+  avant DTS/TrueHD) à la moins compatible, par vagues (rex range les versions dans leur ordre de
+  création). `SFFS_REX_ORDER=quality` met la meilleure qualité en tête (4K REMUX), pour des
+  lecteurs qui la lisent sans conversion. L'ordre est fixé à la création du titre dans rex.
 - **Pas de garde-fou.** rex n'analyse aucun fichier : seule une lecture (ou une conversion) lit
   des octets.
 - **Infos techniques.** rex exige un résultat ffprobe par fichier. Au départ, sffs le fabrique
@@ -61,6 +67,7 @@ identifie quelques centaines de fichiers par minute au premier remplissage.
 | `SFFS_REX_BYTES_URL` | `http://<SFFS_REX_LISTEN>` | Adresse du serveur d'octets vue par rex |
 | `SFFS_REX_TOKEN` / `SFFS_REX_TOKEN_FILE` | créé dans `SFFS_REX_STATE/token` | Jeton exigé par le serveur d'octets |
 | `SFFS_REX_STATE` | `~/.cache/sffs-rex` | Jeton et analyses ffprobe |
+| `SFFS_REX_ORDER` | `compat` | Ordre des versions : `compat` ou `quality` |
 | `SFFS_REX_PROBE` | `1` | `0` : pas d'analyse à la première lecture |
 | `SFFS_REX_FORCE` | vide | `1` : envoi complet autorisé à retirer plus de la moitié des fichiers |
 | `SFFS_FFPROBE` | `ffprobe` | Binaire ffprobe |

@@ -18,6 +18,11 @@ alongside.
   that rex gets when the source registers. A request from rex is relayed to AllDebrid with the same
   `Range`, through `SFFS_DEBRID_PROXY` when set. A version no longer cached is replaced by a cached
   one, as for Silo.
+- **Version order.** A Plex app plays a title's first version: the server does not choose, it
+  converts the one asked for. sffs therefore sends each title's versions from the most compatible
+  (1080p, then 720p, then 4K; H.264 before HEVC; SDR; AC3/E-AC3/AAC audio before DTS/TrueHD) to the
+  least, in waves (rex orders versions by creation). `SFFS_REX_ORDER=quality` puts the best quality
+  first (4K REMUX) for players that need no conversion. The order is set when rex creates the title.
 - **No guard.** rex analyzes no file: only playback (or a conversion) reads bytes.
 - **Technical info.** rex needs an ffprobe result per file. At first sffs builds one from what
   StreamFusion parses out of the release name (codecs, resolution, HDR, languages), with no duration

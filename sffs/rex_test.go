@@ -115,3 +115,19 @@ func TestRexServeAuth(t *testing.T) {
 		t.Errorf("sans jeton : %d", rec.Code)
 	}
 }
+
+func TestCompatOrder(t *testing.T) {
+	uhdRemux := probeInfo{Resolution: "2160p", CodecVideo: "hevc", CodecAudio: "dts", HDR: true}
+	fhdX264 := probeInfo{Resolution: "1080p", CodecVideo: "h264", CodecAudio: "ac3"}
+	fhdHevcDts := probeInfo{Resolution: "1080p", CodecVideo: "hevc", CodecAudio: "dts"}
+	hd := probeInfo{Resolution: "720p", CodecVideo: "h264", CodecAudio: "aac"}
+	order := []probeInfo{fhdX264, fhdHevcDts, hd, uhdRemux}
+	for i := 0; i+1 < len(order); i++ {
+		if lessRank(compatRank(order[i]), compatRank(order[i+1])) >= 0 {
+			t.Errorf("compat : %v devrait passer avant %v", order[i], order[i+1])
+		}
+	}
+	if lessRank(qualityRank(uhdRemux, true), qualityRank(fhdX264, false)) >= 0 {
+		t.Error("quality : la 4K REMUX devrait passer en tête")
+	}
+}
