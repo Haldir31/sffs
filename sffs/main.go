@@ -1171,6 +1171,7 @@ func (n *rootNode) reloadLoop(every time.Duration, silo *siloNotifier) {
 		added, removed, changed := n.apply(ctx, movies, shows, true)
 		log.Printf("rechargement : %d fichiers ajoutés, %d retirés, %d dossiers modifiés en %s", added, removed, len(changed), time.Since(t0).Round(time.Second))
 		silo.add(changed)
+		rexFeed.add(changed)
 		movies, shows = nil, nil
 		debug.FreeOSMemory()
 	}
@@ -1531,6 +1532,14 @@ func main() {
 	go silo.libraryLoop(cfg.series)
 	go silo.healLoop(5 * time.Minute)
 	go selfCheck(cfg.mount)
+	if rc, err := loadRexConfig(); err != nil {
+		log.Fatalf("source rex : %v", err)
+	} else if rc.url != "" {
+		rexFeed = newRexSource(rc, root)
+		if err := rexFeed.start(); err != nil {
+			log.Fatal(err)
+		}
+	}
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)

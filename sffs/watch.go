@@ -284,6 +284,7 @@ func (n *rootNode) watchLoop(wc watchConfig, wm int64, fps map[titleKey]titleFP,
 					len(mids), len(sids), added, removed, len(changed), time.Since(t0).Round(time.Millisecond))
 			}
 			silo.add(changed)
+			rexFeed.add(changed)
 		}
 		silo.flush(ctx)
 	}
