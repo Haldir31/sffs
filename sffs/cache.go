@@ -148,19 +148,68 @@ func (r *resolver) cached(ctx context.Context, v *version) bool {
 			return true
 		}
 	}
+	orig := codecOfVersion(v)
 	for _, b := range fallbackBuckets[v.bucket] {
+		best := -1
 		for i := range e.srcs {
 			s := e.srcs[i]
-			if s.instant && s.bucket == b {
-				log.Printf("substitution %s %q -> %s %q (%s)", v.id, v.name, s.hash[:8], s.file, b)
-				v.sub = &s
-				v.sizeExact = false // taille réelle apprise juste après
-				delete(r.cache, v.id)
-				return true
+			if s.instant && s.bucket == b && (best < 0 || substituteRank(orig, s.file) < substituteRank(orig, e.srcs[best].file)) {
+				best = i
 			}
+		}
+		if best >= 0 {
+			s := e.srcs[best]
+			log.Printf("substitution %s %q -> %s %q (%s)", v.id, v.name, s.hash[:8], s.file, b)
+			v.sub = &s
+			v.sizeExact = false // taille réelle apprise juste après
+			delete(r.cache, v.id)
+			return true
 		}
 	}
 	return false
+}
+
+var (
+	reAV1  = regexp.MustCompile(`(?i)\bav1\b`)
+	reHEVC = regexp.MustCompile(`(?i)(x265|h\.?265|hevc)`)
+	reAVC  = regexp.MustCompile(`(?i)(x264|h\.?264|\bavc\b)`)
+)
+
+// codecOfName devine le codec vidéo d'une release d'après son nom (vide si inconnu).
+func codecOfName(name string) string {
+	switch {
+	case reAV1.MatchString(name):
+		return "av1"
+	case reHEVC.MatchString(name):
+		return "hevc"
+	case reAVC.MatchString(name):
+		return "h264"
+	}
+	return ""
+}
+
+func codecOfVersion(v *version) string {
+	var pi probeInfo
+	if json.Unmarshal(v.probeJSON, &pi) == nil && pi.CodecVideo != "" {
+		return pi.CodecVideo
+	}
+	return codecOfName(v.name)
+}
+
+// substituteRank classe les remplaçantes d'une même qualité (plus petit = préférée) : même codec
+// que l'original, puis H.264/HEVC, l'AV1 en dernier (peu de lecteurs le décodent en matériel,
+// Apple TV compris), sauf si l'original est lui-même en AV1. À égalité, l'ordre de StreamFusion.
+func substituteRank(orig, file string) int {
+	c := codecOfName(file)
+	switch {
+	case c != "" && c == orig:
+		return 0
+	case c == "h264" || c == "hevc":
+		return 1
+	case c == "":
+		return 2
+	}
+	return 3 // av1 (ou autre) alors que l'original ne l'est pas
 }
 
 // servedHash renvoie le hash du torrent réellement lu pour cette version (la remplaçante s'il y en a une).
