@@ -118,6 +118,7 @@ The playback service is fixed to AllDebrid (`"service":"AD"` in `playbackURL`, `
 | 0004 | Jellyfin compatibility: the version requested in PlaybackInfo is armed (Apple TV, Infuse…) |
 | 0005 | An uncached version falls back to another version of the same title |
 | 0006 | Analyse the source actually served (`user.sf.served`) when sffs substituted a version; after a failure, no new attempt for one hour |
+| 0007 | Estimated bitrate (size and runtime) for the lower version offered in a 4K title's quality menu: without it the Silo Apple TV app rejected the answer (`keyNotFound: bitrateKbps`); the entry is left out when no estimate is possible |
 
 The patches change nothing outside `SILO_SF_ROOT`: other libraries behave as in official Silo.
 

@@ -25,7 +25,7 @@ les lit. Les octets ne sont lus chez AllDebrid qu'au moment d'une lecture.
 
 ## Silo modifié
 
-`silo/patches/0001…0006` sur `silo/BASE_COMMIT` (Silo officiel), appliqués par
+`silo/patches/0001…0007` sur `silo/BASE_COMMIT` (Silo officiel), appliqués par
 `build-images.sh silo` (clone → checkout BASE → `git am` → image `localhost/silo-sffs`).
 Actifs seulement sous `SILO_SF_ROOT` ; le reste se comporte comme Silo officiel.
 Pour modifier le fork : appliquer les patchs dans un clone, committer (titres « sffs : … », un
