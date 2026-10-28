@@ -120,6 +120,7 @@ Le service de lecture est fixé sur AllDebrid (`"service":"AD"` dans `playbackUR
 | 0004 | Compatibilité Jellyfin : la version demandée dans PlaybackInfo est armée (Apple TV, Infuse…) |
 | 0005 | Une version hors cache bascule sur une autre version du même titre |
 | 0006 | Analyse de la source réellement servie (`user.sf.served`) quand sffs a substitué une version ; après un échec, pas de nouvel essai pendant une heure |
+| 0007 | Débit estimé (taille et durée) pour la version plus basse proposée dans le menu des qualités d'une 4K : sans lui, l'application Silo Apple TV rejetait la réponse (`keyNotFound: bitrateKbps`) ; entrée omise si l'estimation est impossible |
 
 Les patchs ne changent rien hors de `SILO_SF_ROOT` : les autres bibliothèques se comportent comme dans Silo officiel.
 

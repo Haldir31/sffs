@@ -1,0 +1,84 @@
+From a9fab61230c32539d064b65c044a400d4b50e0f4 Mon Sep 17 00:00:00 2001
+From: haldir <haldir@localhost>
+Date: Wed, 28 Oct 2026 06:17:30 +0000
+Subject: [PATCH 7/7] =?UTF-8?q?sffs=20:=20d=C3=A9bit=20estim=C3=A9=20pour=20la?=
+ =?UTF-8?q?=20version=20plus=20basse=20du=20menu=20des=20qualit=C3=A9s?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Une version jamais analysée (fichier virtuel StreamFusion) n'a pas de débit :
+l'entrée « version plus basse » du menu partait sans bitrate_kbps et
+l'application Silo Apple TV rejetait toute la réponse (keyNotFound). Débit
+estimé d'après la taille et la durée (celle de la version demandée à défaut) ;
+entrée omise si l'estimation est impossible.
+---
+ internal/api/handlers/playback_v3.go | 28 +++++++++++++++++++++++++---
+ internal/playback/plan_v3.go         |  4 +++-
+ 2 files changed, 28 insertions(+), 4 deletions(-)
+
+diff --git a/internal/api/handlers/playback_v3.go b/internal/api/handlers/playback_v3.go
+index 64a7f5a37..e4e7d36f4 100644
+--- a/internal/api/handlers/playback_v3.go
++++ b/internal/api/handlers/playback_v3.go
+@@ -6671,9 +6671,10 @@ func (h *PlaybackHandler) lowerVersionV3(ctx context.Context, req playback.Start
+ 			// Candidates are ordered non-4K first; the rest are 4K too.
+ 			return nil
+ 		}
++		requested := playback.SourceDescriptorFromFileV3(base, 0)
+ 		return &playback.LowerVersionV3{
+-			Requested: playback.SourceDescriptorFromFileV3(base, 0),
+-			Lower:     playback.SourceDescriptorFromFileV3(alternate, 0),
++			Requested: requested,
++			Lower:     lowerDescriptorV3(alternate, requested),
+ 		}
+ 	}
+ 	return nil
+@@ -6687,7 +6688,28 @@ func lowerVersionForFileV3(lower *playback.LowerVersionV3, file *models.MediaFil
+ 	if lower == nil || file == nil || playback.Is4KMediaFileV3(file) {
+ 		return lower
+ 	}
+-	return &playback.LowerVersionV3{Requested: lower.Requested, Lower: playback.SourceDescriptorFromFileV3(file, 0)}
++	return &playback.LowerVersionV3{Requested: lower.Requested, Lower: lowerDescriptorV3(file, lower.Requested)}
++}
++
++// lowerDescriptorV3 describes a lower version for the quality menu. A file
++// that was never probed (a StreamFusion virtual version, see sfvirtual) has
++// no bitrate, and the menu entry would go out without bitrate_kbps, which
++// clients decode as a required key (Silo Apple TV: keyNotFound). Its bitrate
++// is then estimated from its size and its runtime, or the requested
++// version's runtime when it has none (same title).
++func lowerDescriptorV3(file *models.MediaFile, requested playback.SourceDescriptorV3) playback.SourceDescriptorV3 {
++	desc := playback.SourceDescriptorFromFileV3(file, 0)
++	if desc.BitrateKbps > 0 || file == nil || file.FileSize <= 0 {
++		return desc
++	}
++	seconds := float64(file.Duration)
++	if seconds <= 0 && requested.DurationSeconds != nil {
++		seconds = *requested.DurationSeconds
++	}
++	if seconds > 0 {
++		desc.BitrateKbps = int(float64(file.FileSize) * 8 / seconds / 1000)
++	}
++	return desc
+ }
+ 
+ const (
+diff --git a/internal/playback/plan_v3.go b/internal/playback/plan_v3.go
+index 7f07c8b90..83ff9d817 100644
+--- a/internal/playback/plan_v3.go
++++ b/internal/playback/plan_v3.go
+@@ -965,7 +965,9 @@ func lowerVersionQualitiesV3(input PlannerInputV3) []AvailableQualityV3 {
+ 			}
+ 		}
+ 	}
+-	if label, ok := lowerVersionLabelV3(input.LowerVersion.Requested, lower); ok {
++	// An entry without a bitrate is left out: clients decode bitrate_kbps as
++	// required (the handler estimates it for unprobed versions).
++	if label, ok := lowerVersionLabelV3(input.LowerVersion.Requested, lower); ok && lower.BitrateKbps > 0 {
+ 		qualities = append(qualities, AvailableQualityV3{
+ 			Label:       label,
+ 			DisplayName: label,
+-- 
+2.55.0
+

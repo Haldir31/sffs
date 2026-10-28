@@ -38,7 +38,7 @@ Resources:
 | Path | Contents |
 |---|---|
 | `sffs/` | sffs Go code and its `Dockerfile` |
-| `silo/` | 6 patches applied to official Silo at commit `silo/BASE_COMMIT`, and the `Dockerfile` of the patched image |
+| `silo/` | 7 patches applied to official Silo at commit `silo/BASE_COMMIT`, and the `Dockerfile` of the patched image |
 | `build-images.sh` | Builds the `localhost/sffs` and `localhost/silo-sffs` images (Docker or Podman) |
 | `.github/workflows/` | Builds and publishes the images to `ghcr.io/haldir31` (amd64, arm64); weekly check that the patches still apply to Silo `main` |
 | `docker/` | `compose.yml` for Docker without SSDV2 |

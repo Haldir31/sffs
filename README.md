@@ -39,7 +39,7 @@ Côté ressources :
 | Chemin | Contenu |
 |---|---|
 | `sffs/` | Code Go de sffs et son `Dockerfile` |
-| `silo/` | 6 patchs à appliquer sur Silo officiel au commit `silo/BASE_COMMIT`, et le `Dockerfile` de l'image modifiée |
+| `silo/` | 7 patchs à appliquer sur Silo officiel au commit `silo/BASE_COMMIT`, et le `Dockerfile` de l'image modifiée |
 | `build-images.sh` | Construit les images `localhost/sffs` et `localhost/silo-sffs` (Docker ou Podman) |
 | `docker/` | `compose.yml` pour Docker sans SSDV2 |
 | `deploy/` | Scripts et modèles de configuration pour Podman rootless |
