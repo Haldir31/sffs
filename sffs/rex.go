@@ -1025,18 +1025,35 @@ func (s *rexSource) isExcluded(id string) bool {
 	return ok && time.Now().Before(e.Until)
 }
 
-// exclude retire une version de rex (au prochain envoi) pour rexExcludeTTL.
+// exclude retire une version de rex (au prochain envoi) pour rexExcludeTTL. Un torrent hors cache
+// l'est pour tous ses fichiers : les autres épisodes du même torrent (intégrale, pack de saison)
+// sont retirés en même temps, sans attendre qu'un lecteur tombe dessus un par un.
 func (s *rexSource) exclude(rf rexFile, why string) {
-	s.emu.Lock()
-	e, had := s.excluded[rf.f.v.id]
-	already := had && time.Now().Before(e.Until)
-	s.excluded[rf.f.v.id] = rexExcluded{Until: time.Now().Add(rexExcludeTTL), Dir: rf.dir}
-	s.emu.Unlock()
-	if !already {
+	if s.excludeOne(rf.f.v.id, rf.dir) {
 		log.Printf("rex : %s %q %s : retirée de rex pour %s", rf.f.v.id, rf.f.v.name, why, rexExcludeTTL)
+	}
+	if h := rf.f.v.infoHash; h != "" && s.root != nil {
+		others := 0
+		for _, o := range s.files(map[string]bool{rf.dir: true})[rf.dir] {
+			if o.f.v.infoHash == h && o.f.v.id != rf.f.v.id && s.excludeOne(o.f.v.id, o.dir) {
+				others++
+			}
+		}
+		if others > 0 {
+			log.Printf("rex : %d autres fichiers du torrent %.8s retirés aussi", others, h)
+		}
 	}
 	s.saveExcluded()
 	s.add([]string{rf.dir})
+}
+
+// excludeOne marque une version exclue ; vrai si elle ne l'était pas déjà.
+func (s *rexSource) excludeOne(id, dir string) bool {
+	s.emu.Lock()
+	defer s.emu.Unlock()
+	e, had := s.excluded[id]
+	s.excluded[id] = rexExcluded{Until: time.Now().Add(rexExcludeTTL), Dir: dir}
+	return !had || !time.Now().Before(e.Until)
 }
 
 // expireExcluded repropose à rex les versions dont l'exclusion a pris fin.

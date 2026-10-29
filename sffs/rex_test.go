@@ -175,3 +175,14 @@ func TestRexExclude(t *testing.T) {
 		t.Error("exclusions non relues ou non nettoyées")
 	}
 }
+
+func TestRexExcludeOne(t *testing.T) {
+	s := newRexSource(rexConfig{stateDir: t.TempDir()}, nil)
+	if !s.excludeOne("e7", "series/G") || s.excludeOne("e7", "series/G") {
+		t.Fatal("excludeOne : nouveau puis déjà exclu attendu")
+	}
+	s.excluded["e7"] = rexExcluded{Until: time.Now().Add(-time.Minute)}
+	if !s.excludeOne("e7", "series/G") {
+		t.Fatal("une exclusion expirée doit compter comme nouvelle")
+	}
+}
