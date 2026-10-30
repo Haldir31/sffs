@@ -1554,6 +1554,12 @@ func main() {
 	go func() {
 		<-sig
 		log.Printf("démontage")
+		// Une copie du montage dans un conteneur (propagation rslave) peut retenir la connexion
+		// FUSE : Wait ne rendrait jamais la main. On s'arrête quand même.
+		time.AfterFunc(15*time.Second, func() {
+			log.Printf("démontage incomplet (montage encore tenu ailleurs) : arrêt")
+			os.Exit(0)
+		})
 		server.Unmount()
 	}()
 	server.Wait()
