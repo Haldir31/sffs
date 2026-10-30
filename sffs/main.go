@@ -56,6 +56,7 @@ type config struct {
 	langs       []string // langues préférées, dans l'ordre (SFFS_LANGS, défaut fr)
 	perQuality  int      // releases gardées par qualité (SFFS_PER_QUALITY, défaut 5, 0 = pas de limite)
 	requireHD   bool     // SFFS_REQUIRE_PREFERRED_HD=1 : écarte les films sans version HD dans une langue préférée
+	allVersions bool     // SFFS_ALL_VERSIONS=1 : toutes les versions lisibles (ni quota, ni filtre de langue, de qualité ou d'encodage léger)
 	cachedOnly  bool     // SFFS_CACHED_ONLY=1 : seulement les versions vues en cache (StreamFusion ou sffs)
 	remux       bool     // SFFS_REMUX (défaut 1) : 0 = écarter les REMUX
 	light       bool     // SFFS_LIGHT (défaut 0) : 1 = garder les encodages légers (HDLight, 4KLight, mHD…)
@@ -120,6 +121,7 @@ func loadConfig() config {
 		c.perQuality = n
 	}
 	c.requireHD = os.Getenv("SFFS_REQUIRE_PREFERRED_HD") == "1"
+	c.allVersions = os.Getenv("SFFS_ALL_VERSIONS") == "1"
 	c.cachedOnly = os.Getenv("SFFS_CACHED_ONLY") == "1"
 	c.remux = os.Getenv("SFFS_REMUX") != "0"
 	c.light = os.Getenv("SFFS_LIGHT") == "1"
@@ -451,7 +453,7 @@ func isLight(raw, quality string) bool {
 
 // excludedByChoice : release écartée par les réglages (REMUX, encodages légers).
 func excludedByChoice(cfg config, raw, quality string) bool {
-	return (!cfg.remux && isRemux(raw, quality)) || (!cfg.light && isLight(raw, quality))
+	return (!cfg.remux && isRemux(raw, quality)) || (!cfg.light && !cfg.allVersions && isLight(raw, quality))
 }
 
 // unplayable : release à écarter (mauvaise qualité ou image disque).
@@ -527,6 +529,24 @@ func selectVersions(vs []*version, cfg config, year, perQuality int) []*version 
 		}
 		kept = append(kept, v)
 	}
+	order := map[string]int{"2160": 0, "1080": 1, "720": 2, "480": 3, "unknown": 4}
+	if cfg.allVersions {
+		// Tout ce qui est lisible : langue préférée, puis en cache, puis seeders, rangé par qualité.
+		sort.SliceStable(kept, func(i, j int) bool {
+			a, b := kept[i], kept[j]
+			if order[a.bucket] != order[b.bucket] {
+				return order[a.bucket] < order[b.bucket]
+			}
+			if a.langScore != b.langScore {
+				return a.langScore < b.langScore
+			}
+			if a.available != b.available {
+				return a.available
+			}
+			return a.seeders > b.seeders
+		})
+		return kept
+	}
 	best := len(cfg.langs)
 	for _, v := range kept {
 		if v.langScore < best {
@@ -583,7 +603,6 @@ func selectVersions(vs []*version, cfg config, year, perQuality int) []*version 
 			}
 		}
 	}
-	order := map[string]int{"2160": 0, "1080": 1, "720": 2, "480": 3, "unknown": 4}
 	sort.SliceStable(out, func(i, j int) bool { return order[out[i].bucket] < order[out[j].bucket] })
 	return out
 }

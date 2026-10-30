@@ -96,3 +96,25 @@ func TestNoQuota(t *testing.T) {
 		}
 	}
 }
+
+func TestAllVersions(t *testing.T) {
+	vs := []*version{
+		{id: "fr", bucket: "1080", releaseKey: "a", langScore: 0},
+		{id: "dup", bucket: "1080", releaseKey: "a", langScore: 0},
+		{id: "en", bucket: "2160", releaseKey: "b", langScore: 1},
+		{id: "sd", bucket: "unknown", releaseKey: "c", langScore: 0},
+		{id: "old", bucket: "1080", releaseKey: "d", year: 1990},
+	}
+	cfg := config{langs: []string{"fr"}, allVersions: true, requireHD: true}
+	got := selectVersions(vs, cfg, 2020, 5)
+	if len(got) != 4 || got[0].id != "en" || got[len(got)-1].id != "sd" {
+		ids := []string{}
+		for _, v := range got {
+			ids = append(ids, v.id)
+		}
+		t.Fatalf("toutes les versions : %v, attendu en, fr, dup, sd (sans la mauvaise année)", ids)
+	}
+	if !excludedByChoice(config{remux: true}, "Film.2020.HDLight.1080p", "") || excludedByChoice(config{remux: true, allVersions: true}, "Film.2020.HDLight.1080p", "") {
+		t.Error("HDLight : écarté par défaut, gardé avec SFFS_ALL_VERSIONS")
+	}
+}

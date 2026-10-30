@@ -80,6 +80,7 @@
 | `SFFS_SERIES_PER_QUALITY` | Versions per quality and per episode (`0` = no limit) | `2` |
 | `SFFS_REMUX` | `0`: discard REMUX releases (and stop always keeping one) | `1` |
 | `SFFS_LIGHT` | `1`: keep light encodes (HDLight, 4KLight, UHDLight, mHD, miniHD, "BluRay.Light"…) | `0` |
+| `SFFS_ALL_VERSIONS` | `1`: every playable StreamFusion version. No quota, no language filter (`SFFS_LANGS` languages first), no SD/unknown-quality filter, light encodes kept; strict duplicates (same torrent), formats Silo cannot read and year mismatches are still dropped | `0` |
 | `SFFS_CACHED_ONLY` | `1`: only versions seen in cache at the debrid service (StreamFusion `availability` column, or torrents already seen cached by sffs); a title without a cached version is not shown. The cache status is part of the watch fingerprint: a version that becomes cached makes its title appear | `0` |
 | `SFFS_SERIES_TMDB` | Only the listed shows | all |
 | `SFFS_TMDB_KEY` | TMDB API key (required with TV shows) | |

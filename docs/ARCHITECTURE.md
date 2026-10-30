@@ -82,6 +82,7 @@
 | `SFFS_SERIES_PER_QUALITY` | Versions par qualité et par épisode (`0` = pas de limite) | `2` |
 | `SFFS_REMUX` | `0` : écarter les REMUX (et ne plus en garder d'office) | `1` |
 | `SFFS_LIGHT` | `1` : garder les encodages légers (HDLight, 4KLight, UHDLight, mHD, miniHD, « BluRay.Light »…) | `0` |
+| `SFFS_ALL_VERSIONS` | `1` : toutes les versions lisibles de StreamFusion. Ni quota, ni filtre de langue (langues de `SFFS_LANGS` en tête), ni filtre SD/qualité inconnue, ni écart des encodages légers ; restent écartés les doublons stricts (même torrent), les formats illisibles par Silo et les erreurs d'année | `0` |
 | `SFFS_CACHED_ONLY` | `1` : seulement les versions vues en cache chez le débrideur (colonne `availability` de StreamFusion, ou torrents déjà vus en cache par sffs) ; un titre sans version en cache n'apparaît pas. L'état du cache entre dans l'empreinte de la surveillance : une version qui passe en cache fait apparaître son titre | `0` |
 | `SFFS_SERIES_TMDB` | Limiter aux séries listées | toutes |
 | `SFFS_TMDB_KEY` | Clé API TMDB (obligatoire avec les séries) | |
