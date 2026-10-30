@@ -54,7 +54,7 @@ type config struct {
 	allowComm   *regexp.Regexp
 	armTTL      time.Duration
 	langs       []string // langues préférées, dans l'ordre (SFFS_LANGS, défaut fr)
-	perQuality  int      // releases gardées par qualité (SFFS_PER_QUALITY, défaut 5, 0 = toutes)
+	perQuality  int      // releases gardées par qualité (SFFS_PER_QUALITY, défaut 5, 0 = pas de limite)
 	requireHD   bool     // SFFS_REQUIRE_PREFERRED_HD=1 : écarte les films sans version HD dans une langue préférée
 	cachedOnly  bool     // SFFS_CACHED_ONLY=1 : seulement les versions vues en cache (StreamFusion ou sffs)
 	remux       bool     // SFFS_REMUX (défaut 1) : 0 = écarter les REMUX
@@ -62,7 +62,7 @@ type config struct {
 
 	series           bool          // SFFS_SERIES=1 : expose aussi les séries sous series/
 	seriesTmdb       []int64       // SFFS_SERIES_TMDB : séries limitées à ces IDs (vide = toutes)
-	seriesPerQuality int           // SFFS_SERIES_PER_QUALITY : versions gardées par qualité et par épisode (défaut 2)
+	seriesPerQuality int           // SFFS_SERIES_PER_QUALITY : versions gardées par qualité et par épisode (défaut 2, 0 = pas de limite)
 	reload           time.Duration // SFFS_RELOAD : relecture périodique de la base StreamFusion (défaut 24h, 0 = jamais)
 	tmdbKey          string        // SFFS_TMDB_KEY : liste des épisodes par saison
 	tmdbCache        string        // SFFS_TMDB_CACHE : cache disque des réponses TMDB
@@ -518,9 +518,7 @@ func selectVersions(vs []*version, cfg config, year, perQuality int) []*version 
 		}
 		vs = kept
 	}
-	if perQuality == 0 {
-		return vs
-	}
+	// perQuality 0 : pas de quota par qualité, les autres règles (année, langue, doublons) restent.
 	// Erreurs de rapprochement de la base : année trop éloignée de celle du film.
 	kept := vs[:0:0]
 	for _, v := range vs {
@@ -570,7 +568,7 @@ func selectVersions(vs []*version, cfg config, year, perQuality int) []*version 
 		if v.bucket == "480" || v.bucket == "unknown" {
 			continue
 		}
-		if count[v.bucket] >= perQuality {
+		if perQuality > 0 && count[v.bucket] >= perQuality {
 			continue
 		}
 		seenRelease[v.releaseKey] = true
@@ -579,7 +577,7 @@ func selectVersions(vs []*version, cfg config, year, perQuality int) []*version 
 	}
 	if len(out) == 0 && !cfg.requireHD { // rien en HD : SD / inconnue
 		for _, v := range kept {
-			if v.langScore == best && !seenRelease[v.releaseKey] && len(out) < perQuality {
+			if v.langScore == best && !seenRelease[v.releaseKey] && (perQuality == 0 || len(out) < perQuality) {
 				seenRelease[v.releaseKey] = true
 				out = append(out, v)
 			}

@@ -76,10 +76,10 @@
 | `SFFS_ARM_TTL` | Durée de validité d'un armement | `6h` |
 | `SFFS_LANGS` | Langues préférées, dans l'ordre | `fr` |
 | `SFFS_REQUIRE_PREFERRED_HD` | Ignorer les titres sans version dans une langue préférée | `0` |
-| `SFFS_PER_QUALITY` | Versions par qualité pour un film (`0` = toutes) | `5` |
+| `SFFS_PER_QUALITY` | Versions par qualité pour un film (`0` = pas de limite ; langue, année et doublons restent filtrés) | `5` |
 | `SFFS_TMDB` | Limiter aux films listés (IDs TMDB, tests) | tous |
 | `SFFS_SERIES` | Exposer aussi les séries | `0` |
-| `SFFS_SERIES_PER_QUALITY` | Versions par qualité et par épisode | `2` |
+| `SFFS_SERIES_PER_QUALITY` | Versions par qualité et par épisode (`0` = pas de limite) | `2` |
 | `SFFS_REMUX` | `0` : écarter les REMUX (et ne plus en garder d'office) | `1` |
 | `SFFS_LIGHT` | `1` : garder les encodages légers (HDLight, 4KLight, UHDLight, mHD, miniHD, « BluRay.Light »…) | `0` |
 | `SFFS_CACHED_ONLY` | `1` : seulement les versions vues en cache chez le débrideur (colonne `availability` de StreamFusion, ou torrents déjà vus en cache par sffs) ; un titre sans version en cache n'apparaît pas. L'état du cache entre dans l'empreinte de la surveillance : une version qui passe en cache fait apparaître son titre | `0` |

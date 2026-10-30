@@ -74,10 +74,10 @@
 | `SFFS_ARM_TTL` | How long an arming stays valid | `6h` |
 | `SFFS_LANGS` | Preferred languages, in order | `fr` |
 | `SFFS_REQUIRE_PREFERRED_HD` | Skip titles without a version in a preferred language | `0` |
-| `SFFS_PER_QUALITY` | Versions per quality for a movie (`0` = all) | `5` |
+| `SFFS_PER_QUALITY` | Versions per quality for a movie (`0` = no limit; language, year and duplicates are still filtered) | `5` |
 | `SFFS_TMDB` | Only the listed movies (TMDB IDs, tests) | all |
 | `SFFS_SERIES` | Also expose TV shows | `0` |
-| `SFFS_SERIES_PER_QUALITY` | Versions per quality and per episode | `2` |
+| `SFFS_SERIES_PER_QUALITY` | Versions per quality and per episode (`0` = no limit) | `2` |
 | `SFFS_REMUX` | `0`: discard REMUX releases (and stop always keeping one) | `1` |
 | `SFFS_LIGHT` | `1`: keep light encodes (HDLight, 4KLight, UHDLight, mHD, miniHD, "BluRay.Light"…) | `0` |
 | `SFFS_CACHED_ONLY` | `1`: only versions seen in cache at the debrid service (StreamFusion `availability` column, or torrents already seen cached by sffs); a title without a cached version is not shown. The cache status is part of the watch fingerprint: a version that becomes cached makes its title appear | `0` |
