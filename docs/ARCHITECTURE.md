@@ -76,17 +76,20 @@
 | `SFFS_ARM_TTL` | Durée de validité d'un armement | `6h` |
 | `SFFS_LANGS` | Langues préférées, dans l'ordre | `fr` |
 | `SFFS_REQUIRE_PREFERRED_HD` | Ignorer les titres sans version dans une langue préférée | `0` |
-| `SFFS_PER_QUALITY` | Versions par qualité pour un film (`0` = toutes) | `5` |
+| `SFFS_PER_QUALITY` | Versions par qualité pour un film (`0` = pas de limite ; langue, année et doublons restent filtrés) | `5` |
 | `SFFS_TMDB` | Limiter aux films listés (IDs TMDB, tests) | tous |
 | `SFFS_SERIES` | Exposer aussi les séries | `0` |
-| `SFFS_SERIES_PER_QUALITY` | Versions par qualité et par épisode | `2` |
+| `SFFS_SERIES_PER_QUALITY` | Versions par qualité et par épisode (`0` = pas de limite) | `2` |
 | `SFFS_REMUX` | `0` : écarter les REMUX (et ne plus en garder d'office) | `1` |
 | `SFFS_LIGHT` | `1` : garder les encodages légers (HDLight, 4KLight, UHDLight, mHD, miniHD, « BluRay.Light »…) | `0` |
+| `SFFS_ALL_VERSIONS` | `1` : toutes les versions lisibles de StreamFusion. Ni quota, ni filtre de langue (langues de `SFFS_LANGS` en tête), ni filtre SD/qualité inconnue, ni écart des encodages légers ; restent écartés les doublons stricts (même torrent), les formats illisibles par Silo et les erreurs d'année | `0` |
 | `SFFS_CACHED_ONLY` | `1` : seulement les versions vues en cache chez le débrideur (colonne `availability` de StreamFusion, ou torrents déjà vus en cache par sffs) ; un titre sans version en cache n'apparaît pas. L'état du cache entre dans l'empreinte de la surveillance : une version qui passe en cache fait apparaître son titre | `0` |
 | `SFFS_SERIES_TMDB` | Limiter aux séries listées | toutes |
 | `SFFS_TMDB_KEY` | Clé API TMDB (obligatoire avec les séries) | |
 | `SFFS_TMDB_CACHE` | Cache disque des réponses TMDB | |
 | `SFFS_KNOWN_CACHE` | Sources déjà vues en cache | `$HOME/silo-test/run/known-cached.json` |
+| `SFFS_COMMUNITY_CACHE` | `0` : ignorer le cache communautaire de StreamFusion (table `debrid_cache`, StreamFusion ≥ 1.13.13). Sinon : une version vue en cache récemment passe en tête de la sélection, et au lancement une version absente de la liste vérifiée par StreamFusion est jouée telle quelle au lieu d'être remplacée ; le verdict de StreamFusion prime pour ce qu'il a vérifié, et une entrée démentie à la lecture est oubliée | `1` |
+| `SFFS_COMMUNITY_MAX_AGE` | Âge maximal d'une vérification communautaire prise en compte | `168h` |
 | `SFFS_DEBRID_PROXY` | Proxy des lectures chez le débrideur, ex. `socks5://warp:1080` (le même que StreamFusion) : AllDebrid refuse les adresses de datacenter | aucun |
 | `SFFS_WATCH` | Intervalle de détection des nouveautés (`0` = désactivé) | `1m` |
 | `SFFS_RELOAD` | Rechargement complet (`0` = jamais) | `24h` |
@@ -121,7 +124,9 @@ Le service de lecture est fixé sur AllDebrid (`"service":"AD"` dans `playbackUR
 | 0005 | Une version hors cache bascule sur une autre version du même titre |
 | 0006 | Analyse de la source réellement servie (`user.sf.served`) quand sffs a substitué une version ; après un échec, pas de nouvel essai pendant une heure |
 | 0007 | Débit estimé (taille et durée) pour la version plus basse proposée dans le menu des qualités d'une 4K : sans lui, l'application Silo Apple TV rejetait la réponse (`keyNotFound: bitrateKbps`) ; entrée omise si l'estimation est impossible |
+| 0008 | Une version sffs hors cache est refusée avec le code `source_not_cached` et un message en français (« pas disponible chez AllDebrid pour le moment ») au lieu de `source_unreadable` (« fichier vide ou endommagé ») ; le repli sur une autre version ne change pas |
+| 0009 | Pendant un scan, une racine de série n'est mise en file de rattachement qu'au premier de ses fichiers (au lieu d'une fois par fichier, chaque appel relisant tous les fichiers de la série) ; la synchronisation de la file en fin de scan fait le reste. Indispensable avec `SFFS_ALL_VERSIONS` (séries de dizaines de milliers de versions) |
 
-Les patchs ne changent rien hors de `SILO_SF_ROOT` : les autres bibliothèques se comportent comme dans Silo officiel.
+Les patchs ne changent rien hors de `SILO_SF_ROOT` : les autres bibliothèques se comportent comme dans Silo officiel. Exception : 0009, correctif de performance qui s'applique à toutes les bibliothèques de séries.
 
 Silo trouve les fichiers sffs sous `SILO_SF_ROOT` : `/mnt/sffs` avec SSDV2 (mêmes chemins que l'hôte), `/mnt/sf` avec Compose et Podman.

@@ -54,15 +54,16 @@ type config struct {
 	allowComm   *regexp.Regexp
 	armTTL      time.Duration
 	langs       []string // langues préférées, dans l'ordre (SFFS_LANGS, défaut fr)
-	perQuality  int      // releases gardées par qualité (SFFS_PER_QUALITY, défaut 5, 0 = toutes)
+	perQuality  int      // releases gardées par qualité (SFFS_PER_QUALITY, défaut 5, 0 = pas de limite)
 	requireHD   bool     // SFFS_REQUIRE_PREFERRED_HD=1 : écarte les films sans version HD dans une langue préférée
+	allVersions bool     // SFFS_ALL_VERSIONS=1 : toutes les versions lisibles (ni quota, ni filtre de langue, de qualité ou d'encodage léger)
 	cachedOnly  bool     // SFFS_CACHED_ONLY=1 : seulement les versions vues en cache (StreamFusion ou sffs)
 	remux       bool     // SFFS_REMUX (défaut 1) : 0 = écarter les REMUX
 	light       bool     // SFFS_LIGHT (défaut 0) : 1 = garder les encodages légers (HDLight, 4KLight, mHD…)
 
 	series           bool          // SFFS_SERIES=1 : expose aussi les séries sous series/
 	seriesTmdb       []int64       // SFFS_SERIES_TMDB : séries limitées à ces IDs (vide = toutes)
-	seriesPerQuality int           // SFFS_SERIES_PER_QUALITY : versions gardées par qualité et par épisode (défaut 2)
+	seriesPerQuality int           // SFFS_SERIES_PER_QUALITY : versions gardées par qualité et par épisode (défaut 2, 0 = pas de limite)
 	reload           time.Duration // SFFS_RELOAD : relecture périodique de la base StreamFusion (défaut 24h, 0 = jamais)
 	tmdbKey          string        // SFFS_TMDB_KEY : liste des épisodes par saison
 	tmdbCache        string        // SFFS_TMDB_CACHE : cache disque des réponses TMDB
@@ -120,6 +121,7 @@ func loadConfig() config {
 		c.perQuality = n
 	}
 	c.requireHD = os.Getenv("SFFS_REQUIRE_PREFERRED_HD") == "1"
+	c.allVersions = os.Getenv("SFFS_ALL_VERSIONS") == "1"
 	c.cachedOnly = os.Getenv("SFFS_CACHED_ONLY") == "1"
 	c.remux = os.Getenv("SFFS_REMUX") != "0"
 	c.light = os.Getenv("SFFS_LIGHT") == "1"
@@ -385,6 +387,11 @@ func loadMovies(ctx context.Context, cfg config) ([]*movie, error) {
 				}
 			}
 		}
+		for _, v := range m.versions {
+			if community.has(v.infoHash) {
+				v.available = true // vu en cache par la communauté StreamFusion
+			}
+		}
 		before := len(m.versions)
 		m.versions = selectVersions(m.versions, cfg, year, cfg.perQuality)
 		if len(cfg.tmdb) > 0 && !cfg.partial {
@@ -451,7 +458,7 @@ func isLight(raw, quality string) bool {
 
 // excludedByChoice : release écartée par les réglages (REMUX, encodages légers).
 func excludedByChoice(cfg config, raw, quality string) bool {
-	return (!cfg.remux && isRemux(raw, quality)) || (!cfg.light && isLight(raw, quality))
+	return (!cfg.remux && isRemux(raw, quality)) || (!cfg.light && !cfg.allVersions && isLight(raw, quality))
 }
 
 // unplayable : release à écarter (mauvaise qualité ou image disque).
@@ -518,9 +525,7 @@ func selectVersions(vs []*version, cfg config, year, perQuality int) []*version 
 		}
 		vs = kept
 	}
-	if perQuality == 0 {
-		return vs
-	}
+	// perQuality 0 : pas de quota par qualité, les autres règles (année, langue, doublons) restent.
 	// Erreurs de rapprochement de la base : année trop éloignée de celle du film.
 	kept := vs[:0:0]
 	for _, v := range vs {
@@ -528,6 +533,24 @@ func selectVersions(vs []*version, cfg config, year, perQuality int) []*version 
 			continue
 		}
 		kept = append(kept, v)
+	}
+	order := map[string]int{"2160": 0, "1080": 1, "720": 2, "480": 3, "unknown": 4}
+	if cfg.allVersions {
+		// Tout ce qui est lisible : langue préférée, puis en cache, puis seeders, rangé par qualité.
+		sort.SliceStable(kept, func(i, j int) bool {
+			a, b := kept[i], kept[j]
+			if order[a.bucket] != order[b.bucket] {
+				return order[a.bucket] < order[b.bucket]
+			}
+			if a.langScore != b.langScore {
+				return a.langScore < b.langScore
+			}
+			if a.available != b.available {
+				return a.available
+			}
+			return a.seeders > b.seeders
+		})
+		return kept
 	}
 	best := len(cfg.langs)
 	for _, v := range kept {
@@ -570,7 +593,7 @@ func selectVersions(vs []*version, cfg config, year, perQuality int) []*version 
 		if v.bucket == "480" || v.bucket == "unknown" {
 			continue
 		}
-		if count[v.bucket] >= perQuality {
+		if perQuality > 0 && count[v.bucket] >= perQuality {
 			continue
 		}
 		seenRelease[v.releaseKey] = true
@@ -579,13 +602,12 @@ func selectVersions(vs []*version, cfg config, year, perQuality int) []*version 
 	}
 	if len(out) == 0 && !cfg.requireHD { // rien en HD : SD / inconnue
 		for _, v := range kept {
-			if v.langScore == best && !seenRelease[v.releaseKey] && len(out) < perQuality {
+			if v.langScore == best && !seenRelease[v.releaseKey] && (perQuality == 0 || len(out) < perQuality) {
 				seenRelease[v.releaseKey] = true
 				out = append(out, v)
 			}
 		}
 	}
-	order := map[string]int{"2160": 0, "1080": 1, "720": 2, "480": 3, "unknown": 4}
 	sort.SliceStable(out, func(i, j int) bool { return order[out[i].bucket] < order[out[j].bucket] })
 	return out
 }
@@ -1426,6 +1448,7 @@ func (h *handle) Read(ctx context.Context, dest []byte, off int64) (fuse.ReadRes
 // loadAll lit films et séries dans la base StreamFusion et applique la sélection des versions.
 func loadAll(ctx context.Context, cfg config) ([]*movie, []*show, error) {
 	t0 := time.Now()
+	community.refresh(ctx, cfg.dsn)
 	movies, err := loadMovies(ctx, cfg)
 	if err != nil {
 		return nil, nil, err
@@ -1466,6 +1489,7 @@ func main() {
 		knownPath = os.Getenv("HOME") + "/silo-test/run/known-cached.json"
 	}
 	loadKnown(knownPath)
+	configureCommunity()
 
 	wc := loadWatchConfig()
 	wm, err := watermark(ctx, cfg.dsn) // avant le chargement : rien n'est perdu entre les deux
@@ -1509,6 +1533,7 @@ func main() {
 	if wc.every > 0 {
 		go root.watchLoop(wc, wm, fps, silo)
 	}
+	go community.loop(ctx, cfg.dsn)
 	sec := time.Minute
 	server, err := fs.Mount(cfg.mount, root, &fs.Options{
 		MountOptions: fuse.MountOptions{
@@ -1546,6 +1571,12 @@ func main() {
 	go func() {
 		<-sig
 		log.Printf("démontage")
+		// Une copie du montage dans un conteneur (propagation rslave) peut retenir la connexion
+		// FUSE : Wait ne rendrait jamais la main. On s'arrête quand même.
+		time.AfterFunc(15*time.Second, func() {
+			log.Printf("démontage incomplet (montage encore tenu ailleurs) : arrêt")
+			os.Exit(0)
+		})
 		server.Unmount()
 	}()
 	server.Wait()

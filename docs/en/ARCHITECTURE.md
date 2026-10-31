@@ -74,17 +74,20 @@
 | `SFFS_ARM_TTL` | How long an arming stays valid | `6h` |
 | `SFFS_LANGS` | Preferred languages, in order | `fr` |
 | `SFFS_REQUIRE_PREFERRED_HD` | Skip titles without a version in a preferred language | `0` |
-| `SFFS_PER_QUALITY` | Versions per quality for a movie (`0` = all) | `5` |
+| `SFFS_PER_QUALITY` | Versions per quality for a movie (`0` = no limit; language, year and duplicates are still filtered) | `5` |
 | `SFFS_TMDB` | Only the listed movies (TMDB IDs, tests) | all |
 | `SFFS_SERIES` | Also expose TV shows | `0` |
-| `SFFS_SERIES_PER_QUALITY` | Versions per quality and per episode | `2` |
+| `SFFS_SERIES_PER_QUALITY` | Versions per quality and per episode (`0` = no limit) | `2` |
 | `SFFS_REMUX` | `0`: discard REMUX releases (and stop always keeping one) | `1` |
 | `SFFS_LIGHT` | `1`: keep light encodes (HDLight, 4KLight, UHDLight, mHD, miniHD, "BluRay.Light"…) | `0` |
+| `SFFS_ALL_VERSIONS` | `1`: every playable StreamFusion version. No quota, no language filter (`SFFS_LANGS` languages first), no SD/unknown-quality filter, light encodes kept; strict duplicates (same torrent), formats Silo cannot read and year mismatches are still dropped | `0` |
 | `SFFS_CACHED_ONLY` | `1`: only versions seen in cache at the debrid service (StreamFusion `availability` column, or torrents already seen cached by sffs); a title without a cached version is not shown. The cache status is part of the watch fingerprint: a version that becomes cached makes its title appear | `0` |
 | `SFFS_SERIES_TMDB` | Only the listed shows | all |
 | `SFFS_TMDB_KEY` | TMDB API key (required with TV shows) | |
 | `SFFS_TMDB_CACHE` | Disk cache of TMDB answers | |
 | `SFFS_KNOWN_CACHE` | Sources already seen cached | `$HOME/silo-test/run/known-cached.json` |
+| `SFFS_COMMUNITY_CACHE` | `0`: ignore StreamFusion's community cache (`debrid_cache` table, StreamFusion ≥ 1.13.13). Otherwise a version seen cached recently is ranked first, and at playback a version missing from StreamFusion's checked list is played as is instead of being replaced; StreamFusion's verdict wins for what it checked, and an entry disproved at playback is forgotten | `1` |
+| `SFFS_COMMUNITY_MAX_AGE` | Maximum age of a community check taken into account | `168h` |
 | `SFFS_DEBRID_PROXY` | Proxy for reading from the debrid service, e.g. `socks5://warp:1080` (the same as StreamFusion's): AllDebrid refuses datacenter addresses | none |
 | `SFFS_WATCH` | Interval for detecting new content (`0` = off) | `1m` |
 | `SFFS_RELOAD` | Full reload (`0` = never) | `24h` |
@@ -119,8 +122,10 @@ The playback service is fixed to AllDebrid (`"service":"AD"` in `playbackURL`, `
 | 0005 | An uncached version falls back to another version of the same title |
 | 0006 | Analyse the source actually served (`user.sf.served`) when sffs substituted a version; after a failure, no new attempt for one hour |
 | 0007 | Estimated bitrate (size and runtime) for the lower version offered in a 4K title's quality menu: without it the Silo Apple TV app rejected the answer (`keyNotFound: bitrateKbps`); the entry is left out when no estimate is possible |
+| 0008 | A sffs version that is not cached is refused with the `source_not_cached` reason and a French message ("not available at AllDebrid right now") instead of `source_unreadable` ("empty or damaged file"); falling back to another version is unchanged |
+| 0009 | During a scan, a series root is queued for matching only at its first file (instead of once per file, each call re-reading every file of the series); the queue sync at the end of the scan does the rest. Needed with `SFFS_ALL_VERSIONS` (series with tens of thousands of versions) |
 
-The patches change nothing outside `SILO_SF_ROOT`: other libraries behave as in official Silo.
+The patches change nothing outside `SILO_SF_ROOT`: other libraries behave as in official Silo. Exception: 0009, a performance fix that applies to every series library.
 
 Silo finds the sffs files under `SILO_SF_ROOT`: `/mnt/sffs` with SSDV2 (same paths as the host), `/mnt/sf`
 with Compose and Podman.

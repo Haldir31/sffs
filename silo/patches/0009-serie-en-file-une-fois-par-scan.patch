@@ -1,0 +1,242 @@
+From adf42727e4a6e68c614c7d19c8061dcf1d422290 Mon Sep 17 00:00:00 2001
+From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
+Date: Fri, 30 Oct 2026 11:32:39 +0000
+Subject: [PATCH] =?UTF-8?q?sffs=20:=20une=20racine=20de=20s=C3=A9rie=20mis?=
+ =?UTF-8?q?e=20en=20file=20une=20seule=20fois=20par=20scan?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Pendant un scan, chaque fichier d'épisode appelait EnqueueSeriesRoot, qui relit tous les
+fichiers de la racine : coût quadratique (30 000 versions = près d'un milliard de lignes).
+Les scans qui se terminent par SyncForFolder / SyncInScope (recalcul de l'état final de
+chaque racine) ne font plus l'appel qu'au premier fichier de chaque racine.
+---
+ internal/scanner/scanner.go                 |  11 ++
+ internal/scanner/series_root_dedupe.go      |  63 ++++++++++++
+ internal/scanner/series_root_dedupe_test.go | 107 ++++++++++++++++++++
+ 3 files changed, 181 insertions(+)
+ create mode 100644 internal/scanner/series_root_dedupe.go
+ create mode 100644 internal/scanner/series_root_dedupe_test.go
+
+diff --git a/internal/scanner/scanner.go b/internal/scanner/scanner.go
+index 75282329c..42b2740ed 100644
+--- a/internal/scanner/scanner.go
++++ b/internal/scanner/scanner.go
+@@ -795,6 +795,10 @@ func (s *Scanner) scanPaths(
+ 	if allowEmptyRootGuard {
+ 		return s.scanFolderByRoots(ctx, folder, walkRoots, reconcileRoots)
+ 	}
++	// sffs : la file des séries est synchronisée sur reconcileRoots à la fin du scan.
++	if s.seriesQueueSyncer != nil && scopesCover(walkRoots, reconcileRoots) {
++		ctx = withSeriesRootDedupe(ctx)
++	}
+ 
+ 	result := &ScanResult{}
+ 
+@@ -1162,6 +1166,10 @@ func (s *Scanner) scanFolderByRoots(
+ 	walkRoots []string,
+ 	reconcileRoots []string,
+ ) (*ScanResult, error) {
++	// sffs : la file des séries est synchronisée sur tout le dossier à la fin du scan.
++	if s.seriesQueueSyncer != nil {
++		ctx = withSeriesRootDedupe(ctx)
++	}
+ 	warning, err := s.scanWarningBeforeWalk(ctx, folder.ID, true)
+ 	if err != nil {
+ 		return nil, err
+@@ -3729,6 +3737,9 @@ func (s *Scanner) enqueueMetadataWork(ctx context.Context, folder *models.MediaF
+ 		if strings.TrimSpace(file.ObservedRootPath) == "" {
+ 			return nil
+ 		}
++		if !firstSeriesRootTouch(ctx, folder.ID, file.ObservedRootPath) {
++			return nil // déjà mise en file pendant ce scan ; la synchronisation finale suit
++		}
+ 		if err := s.metadataQueue.EnqueueSeriesRoot(ctx, folder.ID, file.ObservedRootPath); err != nil {
+ 			return err
+ 		}
+diff --git a/internal/scanner/series_root_dedupe.go b/internal/scanner/series_root_dedupe.go
+new file mode 100644
+index 000000000..eee7220c7
+--- /dev/null
++++ b/internal/scanner/series_root_dedupe.go
+@@ -0,0 +1,63 @@
++package scanner
++
++import (
++	"context"
++	"path/filepath"
++	"strconv"
++	"strings"
++	"sync"
++)
++
++// Pendant un scan, chaque fichier d'épisode remettait sa racine de série en file
++// (EnqueueSeriesRoot), et chaque appel relit tous les fichiers de la racine : coût
++// quadratique (une série de 30 000 versions = près d'un milliard de lignes lues).
++// Les scans qui se terminent par une synchronisation groupée de la file
++// (SyncForFolder / SyncInScope, qui recalcule l'état final de chaque racine) n'ont
++// besoin de l'appel qu'au premier fichier de chaque racine : la racine est mise en
++// file tôt, comme avant, et la synchronisation finale corrige le reste.
++
++type seriesRootDedupeKey struct{}
++
++type seriesRootDedupe struct{ seen sync.Map }
++
++// withSeriesRootDedupe active la déduplication pour ce scan.
++func withSeriesRootDedupe(ctx context.Context) context.Context {
++	if _, ok := ctx.Value(seriesRootDedupeKey{}).(*seriesRootDedupe); ok {
++		return ctx
++	}
++	return context.WithValue(ctx, seriesRootDedupeKey{}, &seriesRootDedupe{})
++}
++
++// firstSeriesRootTouch indique si la racine est vue pour la première fois dans ce
++// scan (toujours vrai hors d'un scan dédupliqué).
++func firstSeriesRootTouch(ctx context.Context, folderID int, root string) bool {
++	d, ok := ctx.Value(seriesRootDedupeKey{}).(*seriesRootDedupe)
++	if !ok {
++		return true
++	}
++	_, loaded := d.seen.LoadOrStore(strconv.Itoa(folderID)+"\x00"+root, struct{}{})
++	return !loaded
++}
++
++// scopesCover indique si chaque chemin parcouru est dans l'un des périmètres
++// synchronisés à la fin du scan.
++func scopesCover(walkRoots, scopes []string) bool {
++	if len(walkRoots) == 0 || len(scopes) == 0 {
++		return false
++	}
++	for _, w := range walkRoots {
++		w = filepath.Clean(w)
++		covered := false
++		for _, sc := range scopes {
++			sc = filepath.Clean(sc)
++			if w == sc || strings.HasPrefix(w, sc+string(filepath.Separator)) {
++				covered = true
++				break
++			}
++		}
++		if !covered {
++			return false
++		}
++	}
++	return true
++}
+diff --git a/internal/scanner/series_root_dedupe_test.go b/internal/scanner/series_root_dedupe_test.go
+new file mode 100644
+index 000000000..cc1696e70
+--- /dev/null
++++ b/internal/scanner/series_root_dedupe_test.go
+@@ -0,0 +1,107 @@
++package scanner
++
++import (
++	"context"
++	"sync"
++	"testing"
++
++	"github.com/Silo-Server/silo-server/internal/models"
++)
++
++type countingQueue struct {
++	mu     sync.Mutex
++	series map[string]int
++	movies int
++}
++
++func (q *countingQueue) EnqueueMovieFile(context.Context, int) error {
++	q.mu.Lock()
++	defer q.mu.Unlock()
++	q.movies++
++	return nil
++}
++
++func (q *countingQueue) EnqueueSeriesRoot(_ context.Context, _ int, root string) error {
++	q.mu.Lock()
++	defer q.mu.Unlock()
++	q.series[root]++
++	return nil
++}
++
++func TestSeriesRootEnqueuedOncePerScan(t *testing.T) {
++	q := &countingQueue{series: map[string]int{}}
++	s := &Scanner{metadataQueue: q}
++	folder := &models.MediaFolder{ID: 2, Type: "series"}
++	files := []models.MediaFile{
++		{ID: 1, ObservedRootPath: "/mnt/sf/series/A"},
++		{ID: 2, ObservedRootPath: "/mnt/sf/series/A"},
++		{ID: 3, ObservedRootPath: "/mnt/sf/series/B"},
++		{ID: 4, ObservedRootPath: "/mnt/sf/series/A"},
++	}
++
++	// Hors scan dédupliqué : comportement d'origine, un appel par fichier.
++	for i := range files {
++		if err := s.enqueueMetadataWork(context.Background(), folder, &files[i]); err != nil {
++			t.Fatal(err)
++		}
++	}
++	if q.series["/mnt/sf/series/A"] != 3 || q.series["/mnt/sf/series/B"] != 1 {
++		t.Fatalf("sans déduplication : %v", q.series)
++	}
++
++	// Dans un scan : un seul appel par racine, même en parallèle.
++	q.series = map[string]int{}
++	ctx := withSeriesRootDedupe(context.Background())
++	var wg sync.WaitGroup
++	for i := range files {
++		wg.Add(1)
++		go func(f models.MediaFile) {
++			defer wg.Done()
++			if err := s.enqueueMetadataWork(ctx, folder, &f); err != nil {
++				t.Error(err)
++			}
++		}(files[i])
++	}
++	wg.Wait()
++	if q.series["/mnt/sf/series/A"] != 1 || q.series["/mnt/sf/series/B"] != 1 {
++		t.Fatalf("avec déduplication : %v", q.series)
++	}
++
++	// Les films ne sont pas concernés.
++	movies := &models.MediaFolder{ID: 1, Type: "movies"}
++	for i := range files {
++		_ = s.enqueueMetadataWork(ctx, movies, &files[i])
++	}
++	if q.movies != len(files) {
++		t.Fatalf("films : %d appels, attendu %d", q.movies, len(files))
++	}
++}
++
++func TestSeriesRootDedupeIsPerFolder(t *testing.T) {
++	ctx := withSeriesRootDedupe(context.Background())
++	if !firstSeriesRootTouch(ctx, 1, "/x") || firstSeriesRootTouch(ctx, 1, "/x") || !firstSeriesRootTouch(ctx, 2, "/x") {
++		t.Fatal("déduplication par (dossier, racine) attendue")
++	}
++	if withSeriesRootDedupe(ctx) != ctx {
++		t.Fatal("un scan imbriqué doit garder la même déduplication")
++	}
++}
++
++func TestScopesCover(t *testing.T) {
++	cases := []struct {
++		walk, scopes []string
++		want         bool
++	}{
++		{[]string{"/mnt/sf/series/A"}, []string{"/mnt/sf/series/A"}, true},
++		{[]string{"/mnt/sf/series/A/Season 01"}, []string{"/mnt/sf/series/A"}, true},
++		{[]string{"/mnt/sf/series/AB"}, []string{"/mnt/sf/series/A"}, false},
++		{[]string{"/mnt/sf/series/A", "/mnt/sf/series/B"}, []string{"/mnt/sf/series/A"}, false},
++		{[]string{"/mnt/sf/series/A"}, nil, false},
++		{nil, []string{"/mnt/sf/series/A"}, false},
++	}
++	for _, c := range cases {
++		if got := scopesCover(c.walk, c.scopes); got != c.want {
++			t.Errorf("scopesCover(%v, %v) = %v, attendu %v", c.walk, c.scopes, got, c.want)
++		}
++	}
++}
+-- 
+2.56.0
+

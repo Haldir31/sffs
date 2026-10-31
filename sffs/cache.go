@@ -137,6 +137,16 @@ func (r *resolver) cached(ctx context.Context, v *version) bool {
 	if v.sub != nil && e.instant[v.sub.hash] {
 		return true
 	}
+	// Pas vérifié par StreamFusion (hors de sa liste) mais vu en cache par la communauté.
+	if communityFallback(e, v.infoHash) {
+		if v.sub != nil {
+			v.sub = nil
+			v.size, v.sizeExact = v.origSize, v.origExact
+			delete(r.cache, v.id)
+		}
+		log.Printf("cache communautaire : %s %q joué tel quel (non vérifié par StreamFusion)", v.id, v.name)
+		return true
+	}
 	// Un REMUX hors cache est remplacé d'abord par un autre REMUX en cache de même qualité.
 	for i := range e.srcs {
 		s := e.srcs[i]
@@ -254,6 +264,7 @@ func (r *resolver) markUncached(v *version) {
 		v.sub = nil
 	}
 	r.mu.Unlock()
+	community.drop(hash) // démenti par la lecture
 	r.cc.mu.Lock()
 	if e := r.cc.entries[kind+"/"+id]; e != nil {
 		select {

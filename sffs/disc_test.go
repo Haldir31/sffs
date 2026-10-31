@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestUnplayable(t *testing.T) {
 	for raw, want := range map[string]bool{
@@ -66,5 +69,52 @@ func TestLightAndRemux(t *testing.T) {
 	}
 	if !excludedByChoice(config{remux: false, light: true}, remux, "") || excludedByChoice(config{remux: false, light: true}, hdl, "") {
 		t.Error("SFFS_REMUX=0 SFFS_LIGHT=1 : REMUX écarté, encodage léger gardé")
+	}
+}
+
+func TestNoQuota(t *testing.T) {
+	var vs []*version
+	for i := 0; i < 8; i++ {
+		vs = append(vs, &version{id: fmt.Sprint("fr", i), bucket: "1080", releaseKey: fmt.Sprint("r", i), langScore: 0})
+	}
+	vs = append(vs,
+		&version{id: "dup", bucket: "1080", releaseKey: "r0", langScore: 0}, // même release
+		&version{id: "en", bucket: "1080", releaseKey: "en", langScore: 1},  // autre langue
+		&version{id: "old", bucket: "1080", releaseKey: "old", year: 1990},  // mauvaise année
+	)
+	cfg := config{langs: []string{"fr"}}
+	if got := selectVersions(vs, cfg, 2020, 5); len(got) != 5 {
+		t.Fatalf("quota 5 : %d versions", len(got))
+	}
+	got := selectVersions(vs, cfg, 2020, 0)
+	if len(got) != 8 {
+		t.Fatalf("sans quota : %d versions, attendu les 8 releases en français", len(got))
+	}
+	for _, v := range got {
+		if v.id == "dup" || v.id == "en" || v.id == "old" {
+			t.Errorf("sans quota : %s ne devait pas être gardée", v.id)
+		}
+	}
+}
+
+func TestAllVersions(t *testing.T) {
+	vs := []*version{
+		{id: "fr", bucket: "1080", releaseKey: "a", langScore: 0},
+		{id: "dup", bucket: "1080", releaseKey: "a", langScore: 0},
+		{id: "en", bucket: "2160", releaseKey: "b", langScore: 1},
+		{id: "sd", bucket: "unknown", releaseKey: "c", langScore: 0},
+		{id: "old", bucket: "1080", releaseKey: "d", year: 1990},
+	}
+	cfg := config{langs: []string{"fr"}, allVersions: true, requireHD: true}
+	got := selectVersions(vs, cfg, 2020, 5)
+	if len(got) != 4 || got[0].id != "en" || got[len(got)-1].id != "sd" {
+		ids := []string{}
+		for _, v := range got {
+			ids = append(ids, v.id)
+		}
+		t.Fatalf("toutes les versions : %v, attendu en, fr, dup, sd (sans la mauvaise année)", ids)
+	}
+	if !excludedByChoice(config{remux: true}, "Film.2020.HDLight.1080p", "") || excludedByChoice(config{remux: true, allVersions: true}, "Film.2020.HDLight.1080p", "") {
+		t.Error("HDLight : écarté par défaut, gardé avec SFFS_ALL_VERSIONS")
 	}
 }
