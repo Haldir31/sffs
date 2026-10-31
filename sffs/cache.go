@@ -234,7 +234,7 @@ func (r *resolver) originalCached(ctx context.Context, v *version) bool {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return e.instant[v.infoHash]
+	return e.instant[v.infoHash] || communityFallback(e, v.infoHash) // packs hors de la liste vérifiée
 }
 
 // servedHash renvoie le hash du torrent réellement lu pour cette version (la remplaçante s'il y en a une).
