@@ -88,6 +88,8 @@
 | `SFFS_TMDB_KEY` | Clé API TMDB (obligatoire avec les séries) | |
 | `SFFS_TMDB_CACHE` | Cache disque des réponses TMDB | |
 | `SFFS_KNOWN_CACHE` | Sources déjà vues en cache | `$HOME/silo-test/run/known-cached.json` |
+| `SFFS_COMMUNITY_CACHE` | `0` : ignorer le cache communautaire de StreamFusion (table `debrid_cache`, StreamFusion ≥ 1.13.13). Sinon : une version vue en cache récemment passe en tête de la sélection, et au lancement une version absente de la liste vérifiée par StreamFusion est jouée telle quelle au lieu d'être remplacée ; le verdict de StreamFusion prime pour ce qu'il a vérifié, et une entrée démentie à la lecture est oubliée | `1` |
+| `SFFS_COMMUNITY_MAX_AGE` | Âge maximal d'une vérification communautaire prise en compte | `168h` |
 | `SFFS_DEBRID_PROXY` | Proxy des lectures chez le débrideur, ex. `socks5://warp:1080` (le même que StreamFusion) : AllDebrid refuse les adresses de datacenter | aucun |
 | `SFFS_WATCH` | Intervalle de détection des nouveautés (`0` = désactivé) | `1m` |
 | `SFFS_RELOAD` | Rechargement complet (`0` = jamais) | `24h` |

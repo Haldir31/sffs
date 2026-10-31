@@ -357,6 +357,11 @@ func buildShow(cfg config, tmdb int64, info *tvInfo, rows []seriesRow) *show {
 				}
 			}
 		}
+		for _, v := range vs {
+			if community.has(v.infoHash) {
+				v.available = true // vu en cache par la communauté StreamFusion
+			}
+		}
 		vs = selectVersions(vs, cfg, 0, cfg.seriesPerQuality)
 		if len(vs) == 0 {
 			continue

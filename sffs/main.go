@@ -387,6 +387,11 @@ func loadMovies(ctx context.Context, cfg config) ([]*movie, error) {
 				}
 			}
 		}
+		for _, v := range m.versions {
+			if community.has(v.infoHash) {
+				v.available = true // vu en cache par la communauté StreamFusion
+			}
+		}
 		before := len(m.versions)
 		m.versions = selectVersions(m.versions, cfg, year, cfg.perQuality)
 		if len(cfg.tmdb) > 0 && !cfg.partial {
@@ -1442,6 +1447,7 @@ func (h *handle) Read(ctx context.Context, dest []byte, off int64) (fuse.ReadRes
 // loadAll lit films et séries dans la base StreamFusion et applique la sélection des versions.
 func loadAll(ctx context.Context, cfg config) ([]*movie, []*show, error) {
 	t0 := time.Now()
+	community.refresh(ctx, cfg.dsn)
 	movies, err := loadMovies(ctx, cfg)
 	if err != nil {
 		return nil, nil, err
@@ -1482,6 +1488,7 @@ func main() {
 		knownPath = os.Getenv("HOME") + "/silo-test/run/known-cached.json"
 	}
 	loadKnown(knownPath)
+	configureCommunity()
 
 	wc := loadWatchConfig()
 	wm, err := watermark(ctx, cfg.dsn) // avant le chargement : rien n'est perdu entre les deux
@@ -1525,6 +1532,7 @@ func main() {
 	if wc.every > 0 {
 		go root.watchLoop(wc, wm, fps, silo)
 	}
+	go community.loop(ctx, cfg.dsn)
 	sec := time.Minute
 	server, err := fs.Mount(cfg.mount, root, &fs.Options{
 		MountOptions: fuse.MountOptions{
