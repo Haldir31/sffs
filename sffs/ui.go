@@ -48,7 +48,8 @@ type uiServer struct {
 	defaults map[string]string // valeurs par défaut calculées au démarrage (chemins)
 
 	mu    sync.Mutex
-	st    *state // nil tant que le montage n'est pas prêt
+	st    *state    // nil tant que le montage n'est pas prêt
+	tree  *rootNode // arborescence (catalogue), nil tant que le montage n'est pas prêt
 	fails []time.Time
 }
 
@@ -82,6 +83,8 @@ func startUI(cfg config, wc watchConfig, dataDir string) *uiServer {
 	mux.Handle("GET /api/status", u.auth(u.status))
 	mux.Handle("GET /api/plays", u.auth(u.plays))
 	mux.Handle("GET /api/config", u.auth(u.config))
+	mux.Handle("GET /api/catalog/search", u.auth(u.catalogSearch))
+	mux.Handle("GET /api/catalog/title", u.auth(u.catalogTitle))
 	mux.Handle("GET /api/changes", u.auth(func(w http.ResponseWriter, r *http.Request) {
 		n, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 		writeJSON(w, stats.recentChanges(n))
@@ -102,13 +105,19 @@ func startUI(cfg config, wc watchConfig, dataDir string) *uiServer {
 	return u
 }
 
-func (u *uiServer) setState(st *state) {
+func (u *uiServer) setState(st *state, tree *rootNode) {
 	if u == nil {
 		return
 	}
 	u.mu.Lock()
-	u.st = st
+	u.st, u.tree = st, tree
 	u.mu.Unlock()
+}
+
+func (u *uiServer) root() *rootNode {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return u.tree
 }
 
 // uiPassword : SFFS_UI_PASSWORD, sinon SFFS_UI_PASSWORD_FILE, sinon <dataDir>/ui-password (créé au besoin).

@@ -1603,7 +1603,7 @@ func main() {
 	}
 	log.Printf("monté sur %s", cfg.mount)
 	stats.setPhase("monté")
-	ui.setState(st)
+	ui.setState(st, root)
 	go silo.libraryLoop(cfg.series)
 	go silo.healLoop(5 * time.Minute)
 	go selfCheck(cfg.mount)

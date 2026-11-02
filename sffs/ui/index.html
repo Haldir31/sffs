@@ -27,6 +27,7 @@
       <button role="tab" data-tab="dashboard" aria-selected="true">Tableau de bord</button>
       <button role="tab" data-tab="plays">Lectures</button>
       <button role="tab" data-tab="changes">Nouveautés</button>
+      <button role="tab" data-tab="catalog">Catalogue</button>
       <button role="tab" data-tab="config">Configuration</button>
     </nav>
     <div class="top-right">
@@ -145,6 +146,38 @@
             <tbody id="changes"></tbody>
           </table>
         </div>
+      </div>
+    </section>
+
+    <section id="tab-catalog" class="tab" hidden>
+      <div class="catalog">
+        <div class="card cat-search">
+          <div class="toolbar">
+            <input id="cat-search" type="search" placeholder="Film ou série…" aria-label="Rechercher un film ou une série" autocomplete="off">
+            <select id="cat-kind" aria-label="Type">
+              <option value="">Tout</option>
+              <option value="film">Films</option>
+              <option value="série">Séries</option>
+            </select>
+          </div>
+          <ul id="cat-results" class="cat-results"></ul>
+        </div>
+        <article class="card cat-title" id="cat-title">
+          <p class="muted" id="cat-empty">Cherche un titre pour voir ses fichiers : release, qualité, codecs, langues, taille, indexeur et état du cache.</p>
+          <div id="cat-detail" hidden>
+            <div class="card-head">
+              <h2 id="cat-name"></h2>
+              <span class="muted small" id="cat-meta"></span>
+            </div>
+            <div class="seasons" id="cat-seasons" role="tablist" aria-label="Saisons"></div>
+            <div class="table-wrap">
+              <table class="files">
+                <thead><tr><th>Release</th><th>Qualité</th><th>Vidéo</th><th>Audio</th><th>Langues</th><th class="num">Taille</th><th>Indexeur</th><th class="num">Seeders</th><th>Cache</th></tr></thead>
+                <tbody id="cat-files"></tbody>
+              </table>
+            </div>
+          </div>
+        </article>
       </div>
     </section>
 

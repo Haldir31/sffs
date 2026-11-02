@@ -43,6 +43,87 @@ function titleList(ts) {
   }).join("")}</ul>`;
 }
 
+// ---------------------------------------------------------------- catalogue
+
+let catTimer = null;
+let catCurrent = null; // {kind, tmdb, season}
+
+const tmdbOf = (dir) => +(((dir || "").match(/\{tmdb-(\d+)\}/) || [])[1] || 0);
+
+async function searchCatalog() {
+  const q = $("cat-search").value.trim();
+  const el = $("cat-results");
+  if (q.length < 2) { el.innerHTML = `<li class="muted small">Au moins 2 lettres.</li>`; return; }
+  try {
+    const hits = await api(`/api/catalog/search?q=${encodeURIComponent(q)}&kind=${encodeURIComponent($("cat-kind").value)}`);
+    el.innerHTML = hits.length ? hits.map((h) => `<li><button class="cat-hit${catCurrent && catCurrent.tmdb === h.tmdb && catCurrent.kind === h.kind ? " active" : ""}" data-kind="${esc(h.kind)}" data-tmdb="${h.tmdb}">
+        <span class="title">${esc(dirTitle(h.dir))}</span><span class="muted small">${esc(h.kind)} · ${plural(h.files, "fichier")}</span></button></li>`).join("")
+      : `<li class="muted small">Aucun titre trouvé dans sffs.</li>`;
+  } catch (e) {
+    if (e.message !== "auth") el.innerHTML = `<li class="error small">${esc(e.message)}</li>`;
+  }
+}
+
+const CH = { 8: "7.1", 7: "6.1", 6: "5.1", 2: "2.0", 1: "1.0" };
+
+function fileRow(f) {
+  const p = f.probe || {};
+  const hdr = [p.dolby_vision && "DV", p.hdr10_plus && "HDR10+", p.hdr && !p.dolby_vision && !p.hdr10_plus && "HDR"].filter(Boolean);
+  const video = [(p.codec_video || "").toUpperCase(), ...hdr, p.bit_depth ? p.bit_depth + " bits" : ""].filter(Boolean).join(" · ");
+  const audio = [(p.codec_audio || "").toUpperCase(), CH[p.channels] || (p.channels ? p.channels + " can." : "")].filter(Boolean).join(" ");
+  const cache = [f.known && badge("vu en cache", "ok"), f.community && badge("communauté", "info"), f.served && `<span title="${esc(f.served)}">${badge("remplacée", "accent")}</span>`].filter(Boolean).join(" ") || `<span class="muted">inconnu</span>`;
+  const q = f.bucket === "unknown" ? "?" : f.bucket + "p";
+  return `<tr><td class="file-name">${esc(f.name)}<div class="muted small">${esc(p.quality || "")}${p.quality ? " · " : ""}<span title="info_hash">${esc((f.hash || "").slice(0, 8))}</span> · ajouté ${esc(dayFmt.format(new Date(f.added)))}</div></td>
+    <td>${badge(q, f.bucket === "2160" ? "accent" : "")}${f.remux ? " " + badge("REMUX", "info") : ""}</td>
+    <td class="small">${esc(video || "–")}</td><td class="small">${esc(audio || "–")}</td>
+    <td class="small">${esc((p.languages || []).join(", ") || "–")}</td>
+    <td class="num">${f.size_exact ? "" : "~"}${bytes(f.size)}</td><td class="small">${esc(p.indexer || "–")}</td>
+    <td class="num">${num(f.seeders)}</td><td>${cache}</td></tr>`;
+}
+
+async function openTitle(kind, tmdb, season) {
+  catCurrent = { kind, tmdb, season };
+  $("cat-empty").hidden = true;
+  $("cat-detail").hidden = false;
+  $("cat-files").innerHTML = `<tr><td colspan="9" class="empty">Chargement…</td></tr>`;
+  let t;
+  try {
+    t = await api(`/api/catalog/title?kind=${encodeURIComponent(kind)}&tmdb=${tmdb}${season !== undefined ? "&season=" + season : ""}`);
+  } catch (e) {
+    if (e.message !== "auth") $("cat-files").innerHTML = `<tr><td colspan="9" class="empty">${esc(e.message)}</td></tr>`;
+    return;
+  }
+  catCurrent.season = t.season;
+  $("cat-name").textContent = dirTitle(t.dir);
+  const link = `https://www.themoviedb.org/${kind === "film" ? "movie" : "tv"}/${t.tmdb}`;
+  const total = kind === "film" ? t.files.length : Object.values(t.counts || {}).reduce((a, b) => a + b, 0);
+  $("cat-meta").innerHTML = `${esc(kind)} · ${plural(total, "fichier")} · <a class="ext" href="${esc(link)}" target="_blank" rel="noopener noreferrer">TMDB</a>` +
+    (t.imdb ? ` · <a class="ext" href="https://www.imdb.com/title/${esc(t.imdb)}/" target="_blank" rel="noopener noreferrer">IMDb</a>` : ` · <span class="error">sans IMDb (non vérifiable)</span>`);
+  $("cat-seasons").innerHTML = kind === "série" ? t.seasons.map((s) =>
+    `<button role="tab" aria-selected="${s === t.season}" data-season="${s}">${s === 0 ? "Spéciaux" : "Saison " + s} <span class="muted small">${num(t.counts[s])}</span></button>`).join("") : "";
+  let rows = "", ep = null;
+  for (const f of t.files) {
+    if (kind === "série" && f.episode !== ep) {
+      ep = f.episode;
+      const n = t.files.filter((x) => x.episode === ep).length;
+      rows += `<tr class="ep-head"><td colspan="9">Épisode ${ep} <span class="muted small">· ${plural(n, "version")}</span></td></tr>`;
+    }
+    rows += fileRow(f);
+  }
+  $("cat-files").innerHTML = rows || `<tr><td colspan="9" class="empty">Aucun fichier</td></tr>`;
+  for (const b of document.querySelectorAll(".cat-hit")) b.classList.toggle("active", +b.dataset.tmdb === tmdb && b.dataset.kind === kind);
+}
+
+// Ouvre un titre du catalogue depuis un autre onglet (lectures, nouveautés).
+function gotoTitle(kind, dir) {
+  const id = tmdbOf(dir);
+  if (!id) return;
+  selectTab("catalog");
+  $("cat-search").value = dirTitle(dir);
+  searchCatalog();
+  openTitle(kind, id);
+}
+
 async function loadChanges() {
   changes = await api("/api/changes?limit=3000");
   renderChanges();
@@ -65,7 +146,7 @@ function renderChanges() {
     const [label, cls] = STATE[c.state] || [c.state, ""];
     const link = tmdbLink(c);
     return `<tr><td class="when">${esc(when(c.at))}</td>
-      <td><span class="title">${esc(dirTitle(c.dir))}</span>${link ? ` <a class="ext small" href="${esc(link)}" target="_blank" rel="noopener noreferrer">TMDB</a>` : ""}</td>
+      <td><button class="linkish title" data-goto-kind="${esc(c.kind)}" data-goto-dir="${esc(c.dir)}">${esc(dirTitle(c.dir))}</button>${link ? ` <a class="ext small" href="${esc(link)}" target="_blank" rel="noopener noreferrer">TMDB</a>` : ""}</td>
       <td class="muted">${esc(c.kind)}</td><td>${badge(label, cls)}</td>
       <td class="num">${c.added ? "+" + num(c.added) : "–"}</td><td class="num">${c.removed ? "−" + num(c.removed) : "–"}</td></tr>`;
   }).join("") : `<tr><td colspan="6" class="empty">${changes.length ? "Aucun titre pour ces filtres" : "Aucun changement enregistré depuis la mise en service de cet historique"}</td></tr>`;
@@ -355,7 +436,7 @@ function renderPlays() {
       : `<span class="muted">${["uncached", "no_imdb", "", "list_error"].includes(p.status || "") ? "–" : "originale"}</span>`;
     const err = p.errors ? `<div class="error small">${num(p.errors)} erreur(s) : ${esc(p.last_error)}</div>` : "";
     return `<tr><td class="when">${esc(when(p.at))}</td>
-      <td><div class="title">${esc(t.title)}</div><div class="file">${esc(t.file)}</div>${whoLine(p)}${err}</td>
+      <td><button class="linkish title" data-goto-kind="${t.series ? "série" : "film"}" data-goto-dir="${esc((p.path || "").split("/")[1] || "")}">${esc(t.title)}</button><div class="file">${esc(t.file)}</div>${whoLine(p)}${err}</td>
       <td>${badge(label, cls)}${isLive(p, serverNow) ? " " + badge("En cours", "ok") : ""}</td><td>${served}</td>
       <td class="num">${progress(p) || "–"}</td><td class="num">${ms(p.resolve_ms)}</td><td class="num">${ms(p.first_byte_ms)}</td>
       <td class="num">${p.process ? stalls(p) : "–"}</td><td class="num">${p.bytes ? bytes(p.bytes) : "–"}</td></tr>`;
@@ -422,7 +503,7 @@ function showApp() {
   $("app").hidden = false;
   let saved = "dashboard";
   try { saved = localStorage.getItem("sffs-tab") || saved; } catch (_) { /* stockage indisponible */ }
-  selectTab(["dashboard", "plays", "changes", "config"].includes(saved) ? saved : "dashboard");
+  selectTab(["dashboard", "plays", "changes", "catalog", "config"].includes(saved) ? saved : "dashboard");
   refresh();
 }
 
@@ -454,6 +535,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     refresh();
   };
   $("passes").addEventListener("click", togglePass);
+  $("cat-search").addEventListener("input", () => { clearTimeout(catTimer); catTimer = setTimeout(searchCatalog, 250); });
+  $("cat-kind").addEventListener("input", searchCatalog);
+  $("cat-results").addEventListener("click", (ev) => {
+    const b = ev.target.closest(".cat-hit");
+    if (b) openTitle(b.dataset.kind, +b.dataset.tmdb);
+  });
+  $("cat-seasons").addEventListener("click", (ev) => {
+    const b = ev.target.closest("button[data-season]");
+    if (b && catCurrent) openTitle(catCurrent.kind, catCurrent.tmdb, +b.dataset.season);
+  });
+  document.addEventListener("click", (ev) => {
+    const b = ev.target.closest("[data-goto-dir]");
+    if (b) gotoTitle(b.dataset.gotoKind, b.dataset.gotoDir);
+  });
   $("passes").addEventListener("keydown", togglePass);
   document.addEventListener("visibilitychange", () => { if (!document.hidden && !$("app").hidden) refresh(); });
 
