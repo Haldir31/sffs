@@ -312,13 +312,24 @@ func (s *statsStore) playStatus(id, status, served, bucket string) {
 		s.c.Substituted++
 	case "community":
 		s.c.Community++
-	case "uncached":
+	case "uncached", "no_imdb":
 		s.c.Uncached++
 	case "denied":
 		s.c.Denied++
 	}
 	p.Status, p.Served, p.Bucket = status, served, bucket
 	s.dirty = true
+}
+
+// playStatusIfUnset : comme playStatus, seulement si la lecture n'a pas encore de verdict.
+func (s *statsStore) playStatusIfUnset(id, status, served, bucket string) {
+	s.mu.Lock()
+	p := s.play(id)
+	unset := p != nil && p.Status == ""
+	s.mu.Unlock()
+	if unset {
+		s.playStatus(id, status, served, bucket)
+	}
 }
 
 func (s *statsStore) noteResolve(id, host string, d time.Duration) {

@@ -158,3 +158,13 @@ func TestHumanDuration(t *testing.T) {
 		}
 	}
 }
+
+func TestPlayStatusIfUnset(t *testing.T) {
+	s := &statsStore{current: map[string]*playEvent{}}
+	s.playStart("a", "films/x", "silo")
+	s.playStatusIfUnset("a", "cache", "", "")
+	s.playStatusIfUnset("a", "substitution", "y", "1080") // déjà un verdict : inchangé
+	if p := s.recentPlays(1)[0]; p.Status != "cache" || s.c.Cached != 1 || s.c.Substituted != 0 {
+		t.Fatalf("verdict : %+v %+v", p, s.c)
+	}
+}

@@ -118,6 +118,7 @@ var fallbackBuckets = map[string][]string{
 // par une source en cache de qualité proche.
 func (r *resolver) cached(ctx context.Context, v *version) bool {
 	if v.imdb == "" {
+		stats.playStatus(v.id, "no_imdb", "", "") // sans IMDb, pas de liste StreamFusion à consulter
 		return false
 	}
 	e := r.entry(v)

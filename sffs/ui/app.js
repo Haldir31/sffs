@@ -14,7 +14,8 @@ const STATUS = {
   uncached: ["Hors cache", "bad"],
   denied: ["Démentie", "warn"],
   list_error: ["Erreur StreamFusion", "bad"],
-  "": ["En attente", ""],
+  no_imdb: ["Non vérifiable", "bad"],
+  "": ["Sans verdict", ""],
 };
 
 let tab = "dashboard";
@@ -236,7 +237,7 @@ function renderPlays() {
     const [label, cls] = STATUS[p.status || ""] || [p.status, ""];
     const served = p.status === "substitution" && p.served
       ? `<div class="file">${esc(p.served)}</div>${p.bucket ? `<span class="muted small">${esc(p.bucket === "unknown" ? "qualité inconnue" : p.bucket + "p")}</span>` : ""}`
-      : `<span class="muted">${p.status === "uncached" ? "–" : "originale"}</span>`;
+      : `<span class="muted">${["uncached", "no_imdb", "", "list_error"].includes(p.status || "") ? "–" : "originale"}</span>`;
     const err = p.errors ? `<div class="error small">${num(p.errors)} erreur(s) : ${esc(p.last_error)}</div>` : "";
     return `<tr><td class="when">${esc(when(p.at))}</td>
       <td><div class="title">${esc(t.title)}</div><div class="file">${esc(t.file)}</div>${err}</td>

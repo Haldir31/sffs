@@ -835,7 +835,14 @@ func dataTransport() *http.Transport {
 func (r *resolver) resolve(ctx context.Context, v *version, fresh bool) (string, error) {
 	r.mu.Lock()
 	if hit, ok := r.cache[v.id]; ok && !fresh && time.Since(hit.at) < resolveTTL {
+		sub := v.sub
 		r.mu.Unlock()
+		// Lien déjà obtenu (relance) : la lecture reprend le verdict de la précédente.
+		if sub != nil {
+			stats.playStatusIfUnset(v.id, "substitution", sub.file, sub.bucket)
+		} else {
+			stats.playStatusIfUnset(v.id, "cache", "", "")
+		}
 		return hit.url, nil
 	}
 	r.mu.Unlock()
