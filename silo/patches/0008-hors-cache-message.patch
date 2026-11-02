@@ -1,8 +1,8 @@
-From 9b79203f6c129fb35a3bbeadb1ab39e260e5a4fd Mon Sep 17 00:00:00 2001
+From 8d0f6acf1d96c968e5670a07fae71f8640648d2a Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Wed, 28 Oct 2026 11:23:04 +0000
-Subject: [PATCH] =?UTF-8?q?sffs=20:=20une=20version=20hors=20cache=20n'est?=
- =?UTF-8?q?=20plus=20annonc=C3=A9e=20comme=20ab=C3=AEm=C3=A9e?=
+Subject: [PATCH 08/10] =?UTF-8?q?sffs=20:=20une=20version=20hors=20cache?=
+ =?UTF-8?q?=20n'est=20plus=20annonc=C3=A9e=20comme=20ab=C3=AEm=C3=A9e?=
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -29,10 +29,10 @@ Claude-Session: https://claude.ai/code/session_01QiNjz8NPPdd1V8G79eXFA5
  create mode 100644 internal/playback/sf_not_cached_test.go
 
 diff --git a/internal/api/handlers/playback_v3.go b/internal/api/handlers/playback_v3.go
-index e4e7d36f4..2247e8d7a 100644
+index 6069a3c2a..84647ed2f 100644
 --- a/internal/api/handlers/playback_v3.go
 +++ b/internal/api/handlers/playback_v3.go
-@@ -6744,7 +6744,7 @@ func terminalAllowsAlternateFileV3(terminal *playback.TerminalV3) bool {
+@@ -7103,7 +7103,7 @@ func terminalAllowsAlternateFileV3(terminal *playback.TerminalV3) bool {
  	}
  	switch terminal.Reason {
  	case terminalNoAlternateVersionV3, terminalHDRTranscodeUnsupportedV3, terminalSubtitleConversionUnsupportedV3, terminalBitratePolicyUnavailableV3,
@@ -42,10 +42,10 @@ index e4e7d36f4..2247e8d7a 100644
  	default:
  		return false
 diff --git a/internal/playback/plan_v3.go b/internal/playback/plan_v3.go
-index 83ff9d817..967056512 100644
+index 0efd1192a..61e03765f 100644
 --- a/internal/playback/plan_v3.go
 +++ b/internal/playback/plan_v3.go
-@@ -8,6 +8,7 @@ import (
+@@ -9,6 +9,7 @@ import (
  	"time"
  
  	"github.com/Silo-Server/silo-server/internal/models"
@@ -53,7 +53,7 @@ index 83ff9d817..967056512 100644
  	"github.com/Silo-Server/silo-server/internal/tonemap"
  )
  
-@@ -238,6 +239,10 @@ func PlanPlaybackV3(input PlannerInputV3) (result PlannerResultV3) {
+@@ -269,6 +270,10 @@ func PlanPlaybackV3(input PlannerInputV3) (result PlannerResultV3) {
  	// Answer before the bitrate-cap wrapper below, which would otherwise
  	// rename the refusal after a policy that has nothing to do with it.
  	if file.ProbeRejected() {
@@ -122,7 +122,7 @@ index 000000000..a86dd8de5
 +	}
 +}
 diff --git a/web/src/player/playback-errors.ts b/web/src/player/playback-errors.ts
-index 93b00ff29..a0e0c4e44 100644
+index c37e85154..a2bc624df 100644
 --- a/web/src/player/playback-errors.ts
 +++ b/web/src/player/playback-errors.ts
 @@ -40,6 +40,14 @@ export function describePlanTerminal(terminal: TerminalV3): PlaybackPolicyErrorD
@@ -141,5 +141,5 @@ index 93b00ff29..a0e0c4e44 100644
        return {
          title: "This file hasn't finished scanning",
 -- 
-2.43.0
+2.56.0
 

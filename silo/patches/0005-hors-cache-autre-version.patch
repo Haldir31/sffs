@@ -1,7 +1,7 @@
-From 7343c46a98fcfea905c0bb78a4afd386b227e459 Mon Sep 17 00:00:00 2001
+From acaefa7b49f5c2b2e084157da60018f357f63bae Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 14:31:24 +0000
-Subject: [PATCH 5/6] sffs : une version hors cache bascule sur une autre
+Subject: [PATCH 05/10] sffs : une version hors cache bascule sur une autre
  version du titre
 
 A la lecture, Silo demande a sffs si la version est prete chez le
@@ -17,10 +17,10 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  3 files changed, 38 insertions(+), 5 deletions(-)
 
 diff --git a/internal/scanner/probe_repair.go b/internal/scanner/probe_repair.go
-index b1412a1d6..8690f55d2 100644
+index 6b5bf198e..f5072202f 100644
 --- a/internal/scanner/probe_repair.go
 +++ b/internal/scanner/probe_repair.go
-@@ -406,8 +406,16 @@ func (e *PlaybackProbeEnsurer) ensureProbeRepair(ctx context.Context, file *mode
+@@ -426,8 +426,16 @@ func (e *PlaybackProbeEnsurer) ensureProbeRepair(ctx context.Context, file *mode
  	// Version virtuelle StreamFusion : tant qu'elle n'est pas armée (simple consultation), pas de
  	// ffprobe, qui lirait le fichier chez le débrideur. Armée (lecture en cours), la réparation
  	// complète ce que StreamFusion ne fournit pas (durée, pistes réelles) et l'enregistre.
@@ -105,3 +105,6 @@ index 3f5198929..bdfd0a245 100644
  // Arm autorise la lecture de path pendant quelques heures. Sans effet sur un fichier ordinaire.
  func Arm(path string) {
  	if !Under(path) {
+-- 
+2.56.0
+

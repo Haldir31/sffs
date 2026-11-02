@@ -1,9 +1,9 @@
-From c473c3b25db85d9de3059c280f7dcb666838c0ff Mon Sep 17 00:00:00 2001
+From 3fef3d2478d31f3d0a3bcf698439f6ea65050181 Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 12:40:33 +0000
-Subject: [PATCH 1/6] =?UTF-8?q?sffs=20:=20reconna=C3=AEtre=20les=20fichier?=
- =?UTF-8?q?s=20virtuels=20StreamFusion=20et=20les=20armer=20avant=20lectur?=
- =?UTF-8?q?e?=
+Subject: [PATCH 01/10] =?UTF-8?q?sffs=20:=20reconna=C3=AEtre=20les=20fichi?=
+ =?UTF-8?q?ers=20virtuels=20StreamFusion=20et=20les=20armer=20avant=20lect?=
+ =?UTF-8?q?ure?=
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -26,10 +26,10 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  create mode 100644 internal/sfvirtual/sfvirtual.go
 
 diff --git a/internal/api/handlers/playback.go b/internal/api/handlers/playback.go
-index cdcea7153..e8ba02c39 100644
+index ebdd37c0f..069ffe4c8 100644
 --- a/internal/api/handlers/playback.go
 +++ b/internal/api/handlers/playback.go
-@@ -36,6 +36,7 @@ import (
+@@ -37,6 +37,7 @@ import (
  	"github.com/Silo-Server/silo-server/internal/settingscontract"
  	"github.com/Silo-Server/silo-server/internal/settingskeys"
  	"github.com/Silo-Server/silo-server/internal/settingsresolve"
@@ -37,7 +37,7 @@ index cdcea7153..e8ba02c39 100644
  	"github.com/Silo-Server/silo-server/internal/streamtelemetry"
  	"github.com/Silo-Server/silo-server/internal/streamtoken"
  	"github.com/Silo-Server/silo-server/internal/subtitles"
-@@ -495,6 +496,8 @@ func (h *PlaybackHandler) ensurePlaybackProbe(ctx context.Context, file *models.
+@@ -523,6 +524,8 @@ func (h *PlaybackHandler) ensurePlaybackProbe(ctx context.Context, file *models.
  	if h == nil || h.ProbeEnsurer == nil || file == nil {
  		return file
  	}
@@ -47,7 +47,7 @@ index cdcea7153..e8ba02c39 100644
  	if err != nil {
  		slog.WarnContext(ctx, "playback probe repair failed", "component", "api", "file_id", file.ID, "path", file.FilePath, "error", err)
 diff --git a/internal/api/handlers/playback_missing.go b/internal/api/handlers/playback_missing.go
-index 0612b4275..d2942d9a5 100644
+index 755771c87..c0456e3d8 100644
 --- a/internal/api/handlers/playback_missing.go
 +++ b/internal/api/handlers/playback_missing.go
 @@ -15,6 +15,7 @@ import (
@@ -64,7 +64,7 @@ index 0612b4275..d2942d9a5 100644
  
 +	// Version virtuelle StreamFusion : autorise sa lecture (sans effet sur un fichier ordinaire).
 +	sfvirtual.Arm(file.FilePath)
- 	if _, err := fspath.Stat(file.FilePath); err != nil {
+ 	if _, err := fspath.StatContext(ctx, file.FilePath); err != nil {
  		if os.IsNotExist(err) {
  			markPlaybackFileMissing(ctx, file, marker, eventsHub)
 diff --git a/internal/playback/directplay.go b/internal/playback/directplay.go
@@ -88,7 +88,7 @@ index b2fccfe80..78246f0af 100644
  	if err != nil {
  		if os.IsNotExist(err) {
 diff --git a/internal/scanner/scanner.go b/internal/scanner/scanner.go
-index 40bb43cfc..75282329c 100644
+index e179c50e3..a88dc80f8 100644
 --- a/internal/scanner/scanner.go
 +++ b/internal/scanner/scanner.go
 @@ -26,6 +26,7 @@ import (
@@ -99,7 +99,7 @@ index 40bb43cfc..75282329c 100644
  	"github.com/Silo-Server/silo-server/internal/themesongs"
  )
  
-@@ -4242,6 +4243,10 @@ func (s *Scanner) clearLegacyLinksForUnmatchableRoots(_ context.Context, _ int,
+@@ -4271,6 +4272,10 @@ func (s *Scanner) clearLegacyLinksForUnmatchableRoots(_ context.Context, _ int,
  // gatherHints computes the OSHash for a media file.
  func (s *Scanner) gatherHints(filePath string) FileHints {
  	hints := FileHints{}
@@ -110,7 +110,7 @@ index 40bb43cfc..75282329c 100644
  	hash, err := ComputeOSHash(filePath)
  	if err != nil {
  		slog.Warn("scanner: OSHash computation failed", "path", filePath, "error", err)
-@@ -4260,6 +4265,9 @@ const probeSourceLocal = "local"
+@@ -4289,6 +4294,9 @@ const probeSourceLocal = "local"
  // file.
  func (s *Scanner) probeFile(ctx context.Context, filePath string) (probe *ProbeData, probeSource string, rejected bool) {
  	probeSource = probeSourceLocal
@@ -313,3 +313,6 @@ index 000000000..41f9eab5b
 +	}
 +	_, _ = getxattr(path, attrArm)
 +}
+-- 
+2.56.0
+

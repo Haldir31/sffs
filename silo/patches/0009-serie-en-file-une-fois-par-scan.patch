@@ -1,8 +1,8 @@
-From adf42727e4a6e68c614c7d19c8061dcf1d422290 Mon Sep 17 00:00:00 2001
+From 8587ee2fbe95e82486cdc4e1389e2054eedf7293 Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Fri, 30 Oct 2026 11:32:39 +0000
-Subject: [PATCH] =?UTF-8?q?sffs=20:=20une=20racine=20de=20s=C3=A9rie=20mis?=
- =?UTF-8?q?e=20en=20file=20une=20seule=20fois=20par=20scan?=
+Subject: [PATCH 09/10] =?UTF-8?q?sffs=20:=20une=20racine=20de=20s=C3=A9rie?=
+ =?UTF-8?q?=20mise=20en=20file=20une=20seule=20fois=20par=20scan?=
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -20,10 +20,10 @@ chaque racine) ne font plus l'appel qu'au premier fichier de chaque racine.
  create mode 100644 internal/scanner/series_root_dedupe_test.go
 
 diff --git a/internal/scanner/scanner.go b/internal/scanner/scanner.go
-index 75282329c..42b2740ed 100644
+index a88dc80f8..2f9743412 100644
 --- a/internal/scanner/scanner.go
 +++ b/internal/scanner/scanner.go
-@@ -795,6 +795,10 @@ func (s *Scanner) scanPaths(
+@@ -799,6 +799,10 @@ func (s *Scanner) scanPaths(
  	if allowEmptyRootGuard {
  		return s.scanFolderByRoots(ctx, folder, walkRoots, reconcileRoots)
  	}
@@ -34,7 +34,7 @@ index 75282329c..42b2740ed 100644
  
  	result := &ScanResult{}
  
-@@ -1162,6 +1166,10 @@ func (s *Scanner) scanFolderByRoots(
+@@ -1166,6 +1170,10 @@ func (s *Scanner) scanFolderByRoots(
  	walkRoots []string,
  	reconcileRoots []string,
  ) (*ScanResult, error) {
@@ -45,7 +45,7 @@ index 75282329c..42b2740ed 100644
  	warning, err := s.scanWarningBeforeWalk(ctx, folder.ID, true)
  	if err != nil {
  		return nil, err
-@@ -3729,6 +3737,9 @@ func (s *Scanner) enqueueMetadataWork(ctx context.Context, folder *models.MediaF
+@@ -3757,6 +3765,9 @@ func (s *Scanner) enqueueMetadataWork(ctx context.Context, folder *models.MediaF
  		if strings.TrimSpace(file.ObservedRootPath) == "" {
  			return nil
  		}
