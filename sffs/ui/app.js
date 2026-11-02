@@ -6,6 +6,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const nf = new Intl.NumberFormat("fr-FR");
 const num = (n) => nf.format(n || 0);
+const plural = (n, w) => `${num(n)} ${w}${n > 1 ? "s" : ""}`;
 
 const STATUS = {
   cache: ["En cache", "ok"],
@@ -22,6 +23,53 @@ let tab = "dashboard";
 let timer = null;
 let plays = [];
 let configLoaded = false;
+const openPasses = new Set(); // passages de surveillance dépliés
+let changes = [];
+
+const STATE = { nouveau: ["Nouveau", "ok"], "modifié": ["Modifié", "accent"], "retiré": ["Retiré", "bad"] };
+
+// Titre lisible d'un dossier sffs : sans l'identifiant TMDB.
+const dirTitle = (d) => (d || "").replace(/\s*\{tmdb-\d+\}$/, "");
+const tmdbLink = (c) => {
+  const m = (c.dir || "").match(/\{tmdb-(\d+)\}$/);
+  return m ? `https://www.themoviedb.org/${c.kind === "film" ? "movie" : "tv"}/${m[1]}` : "";
+};
+
+function titleList(ts) {
+  return `<ul class="titles">${ts.map((c) => {
+    const [label, cls] = STATE[c.state] || [c.state, ""];
+    return `<li>${badge(label, cls)} <span class="muted small">${esc(c.kind)}</span> <span class="title">${esc(dirTitle(c.dir))}</span>
+      <span class="muted small">${c.added ? "+" + num(c.added) : ""}${c.added && c.removed ? " / " : ""}${c.removed ? "−" + num(c.removed) : ""} fichier${c.added + c.removed > 1 ? "s" : ""}</span></li>`;
+  }).join("")}</ul>`;
+}
+
+async function loadChanges() {
+  changes = await api("/api/changes?limit=3000");
+  renderChanges();
+}
+
+function renderChanges() {
+  const q = $("chg-search").value.trim().toLowerCase();
+  const st = $("chg-state").value, kind = $("chg-kind").value;
+  const days = +$("chg-period").value;
+  const rows = changes.filter((c) => serverNow - new Date(c.at) < days * 86400e3 &&
+    (!st || c.state === st) && (!kind || c.kind === kind) && (!q || c.dir.toLowerCase().includes(q)));
+  const count = (f) => rows.filter(f).length;
+  $("chg-tiles").innerHTML = [
+    tile("Titres touchés", num(rows.length), days === 1 ? "sur 24 heures" : `sur ${days} jours`),
+    tile("Nouveaux titres", num(count((c) => c.state === "nouveau")), `${plural(count((c) => c.state === "nouveau" && c.kind === "film"), "film")} · ${plural(count((c) => c.state === "nouveau" && c.kind === "série"), "série")}`),
+    tile("Fichiers ajoutés", num(rows.reduce((a, c) => a + c.added, 0)), "nouvelles versions ou épisodes"),
+    tile("Fichiers retirés", num(rows.reduce((a, c) => a + c.removed, 0)), `${plural(count((c) => c.state === "retiré"), "titre")} disparu${count((c) => c.state === "retiré") > 1 ? "s" : ""}`),
+  ].join("");
+  $("changes").innerHTML = rows.length ? rows.slice(0, 1000).map((c) => {
+    const [label, cls] = STATE[c.state] || [c.state, ""];
+    const link = tmdbLink(c);
+    return `<tr><td class="when">${esc(when(c.at))}</td>
+      <td><span class="title">${esc(dirTitle(c.dir))}</span>${link ? ` <a class="ext small" href="${esc(link)}" target="_blank" rel="noopener noreferrer">TMDB</a>` : ""}</td>
+      <td class="muted">${esc(c.kind)}</td><td>${badge(label, cls)}</td>
+      <td class="num">${c.added ? "+" + num(c.added) : "–"}</td><td class="num">${c.removed ? "−" + num(c.removed) : "–"}</td></tr>`;
+  }).join("") : `<tr><td colspan="6" class="empty">${changes.length ? "Aucun titre pour ces filtres" : "Aucun changement enregistré depuis la mise en service de cet historique"}</td></tr>`;
+}
 let serverNow = Date.now(); // heure de sffs (les lectures sont datées par lui)
 const lastBytes = new Map(); // id -> {bytes, t} : débit entre deux actualisations
 const rates = new Map();     // id -> octets/s
@@ -212,12 +260,16 @@ function renderStatus(s) {
   $("watch-summary").textContent = w.every === "désactivé" ? "désactivé" :
     `toutes les ${w.every} · dernier passage ${since(w.last, now)} · ${num(w.runs)} passages`;
   const passes = [...w.passes].reverse();
-  $("passes").innerHTML = passes.length ? passes.slice(0, 15).map((p) => `<tr>
-      <td class="when">${esc(when(p.at))}</td><td>${esc(p.mode || "ciblé")}</td>
+  $("passes").innerHTML = passes.length ? passes.slice(0, 15).map((p) => {
+    const open = openPasses.has(p.at), has = p.titles && p.titles.length;
+    const detail = has && open ? `<tr class="pass-detail"><td colspan="8">${titleList(p.titles)}${p.dirs > p.titles.length ? `<div class="muted small">… et ${num(p.dirs - p.titles.length)} autres titres (onglet Nouveautés)</div>` : ""}</td></tr>` : "";
+    return `<tr class="${has ? "expandable" : ""}" ${has ? `data-pass="${esc(p.at)}" tabindex="0" aria-expanded="${open}"` : ""}>
+      <td class="when">${has ? `<span class="chev" aria-hidden="true">${open ? "▾" : "▸"}</span>` : ""}${esc(when(p.at))}</td><td>${esc(p.mode || "ciblé")}</td>
       <td class="num">${num(p.changed)}<span class="muted"> / ${num(p.touched)}</span></td>
       <td class="num">${num(p.movies)}</td><td class="num">${num(p.shows)}</td>
       <td class="num">${p.added ? "+" + num(p.added) : "–"}</td><td class="num">${p.removed ? "−" + num(p.removed) : "–"}</td>
-      <td class="num">${ms(p.ms)}</td></tr>`).join("")
+      <td class="num">${ms(p.ms)}</td></tr>${detail}`;
+  }).join("")
     : `<tr><td colspan="8" class="empty">Aucun changement depuis le démarrage</td></tr>`;
   if (w.error) $("passes").insertAdjacentHTML("afterbegin", `<tr><td colspan="8">${badge("erreur", "bad")} ${esc(w.error)}</td></tr>`);
   drawChart(w.passes);
@@ -340,6 +392,7 @@ async function refresh() {
     $("stale").hidden = true;
     renderStatus(s);
     if (tab === "plays") renderPlays();
+    if (tab === "changes") await loadChanges();
   } catch (e) {
     if (e.message === "auth") return;
     $("stale").hidden = false;
@@ -354,6 +407,7 @@ function selectTab(name) {
   try { localStorage.setItem("sffs-tab", name); } catch (_) { /* stockage indisponible */ }
   if (name === "plays") renderPlays();
   if (name === "config" && !configLoaded) loadConfig().catch(() => {});
+  if (name === "changes") loadChanges().catch(() => {});
 }
 
 function showLogin() {
@@ -368,7 +422,7 @@ function showApp() {
   $("app").hidden = false;
   let saved = "dashboard";
   try { saved = localStorage.getItem("sffs-tab") || saved; } catch (_) { /* stockage indisponible */ }
-  selectTab(["dashboard", "plays", "config"].includes(saved) ? saved : "dashboard");
+  selectTab(["dashboard", "plays", "changes", "config"].includes(saved) ? saved : "dashboard");
   refresh();
 }
 
@@ -390,6 +444,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   for (const b of document.querySelectorAll(".tabs button")) b.addEventListener("click", () => selectTab(b.dataset.tab));
   for (const id of ["play-search", "play-filter", "play-period"]) $(id).addEventListener("input", renderPlays);
+  for (const id of ["chg-search", "chg-state", "chg-kind", "chg-period"]) $(id).addEventListener("input", renderChanges);
+  const togglePass = (ev) => {
+    const tr = ev.target.closest("tr[data-pass]");
+    if (!tr || (ev.type === "keydown" && ev.key !== "Enter" && ev.key !== " ")) return;
+    ev.preventDefault();
+    const k = tr.dataset.pass;
+    openPasses.has(k) ? openPasses.delete(k) : openPasses.add(k);
+    refresh();
+  };
+  $("passes").addEventListener("click", togglePass);
+  $("passes").addEventListener("keydown", togglePass);
   document.addEventListener("visibilitychange", () => { if (!document.hidden && !$("app").hidden) refresh(); });
 
   try {

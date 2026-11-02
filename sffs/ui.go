@@ -59,6 +59,7 @@ func startUI(cfg config, wc watchConfig, dataDir string) *uiServer {
 		return nil
 	}
 	stats.loadHistory(envOr("SFFS_UI_HISTORY", filepath.Join(dataDir, "play-history.json")))
+	stats.loadChanges(filepath.Join(dataDir, "title-changes.json"))
 	pw, err := uiPassword(dataDir)
 	if err != nil {
 		log.Fatalf("interface web : %v", err)
@@ -81,6 +82,10 @@ func startUI(cfg config, wc watchConfig, dataDir string) *uiServer {
 	mux.Handle("GET /api/status", u.auth(u.status))
 	mux.Handle("GET /api/plays", u.auth(u.plays))
 	mux.Handle("GET /api/config", u.auth(u.config))
+	mux.Handle("GET /api/changes", u.auth(func(w http.ResponseWriter, r *http.Request) {
+		n, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+		writeJSON(w, stats.recentChanges(n))
+	}))
 
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {

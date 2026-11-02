@@ -60,7 +60,21 @@ type watchPass struct {
 	Removed int       `json:"removed"`
 	Dirs    int       `json:"dirs"`
 	Ms      int64     `json:"ms"`
+
+	Titles []titleChange `json:"titles,omitempty"` // détail du passage (50 au plus)
 }
+
+// titleChange : un film ou une série modifié par la surveillance.
+type titleChange struct {
+	At      time.Time `json:"at"`
+	Kind    string    `json:"kind"`  // film, série
+	Dir     string    `json:"dir"`   // dossier chez sffs
+	State   string    `json:"state"` // nouveau, modifié, retiré
+	Added   int       `json:"added"`
+	Removed int       `json:"removed"`
+}
+
+const changesMax = 3000 // titres modifiés gardés (sur disque avec l'historique)
 
 type loadInfo struct {
 	At              time.Time `json:"at,omitzero"`
@@ -137,17 +151,21 @@ type statsStore struct {
 	started time.Time
 	phase   string // chargement, monté
 
-	load        loadInfo
-	reload      reloadInfo
-	files       int // fichiers exposés (somme des ajouts et retraits)
-	movieDirs   int
-	showDirs    int
-	watchEvery  time.Duration
-	watchRuns   int64
-	watchLast   time.Time
-	watchErr    string
-	passes      []watchPass
-	pendingScan watchPass // contrôle en cours, complété par l'application
+	load          loadInfo
+	reload        reloadInfo
+	files         int // fichiers exposés (somme des ajouts et retraits)
+	movieDirs     int
+	showDirs      int
+	watchEvery    time.Duration
+	watchRuns     int64
+	watchLast     time.Time
+	watchErr      string
+	passes        []watchPass
+	pendingScan   watchPass // contrôle en cours, complété par l'application
+	pendingTitles []titleChange
+	changes       []titleChange // du plus ancien au plus récent
+	changesPath   string
+	changesDirty  bool
 
 	silo    siloStats
 	c       counters
@@ -238,9 +256,47 @@ func (s *statsStore) noteWatchApply(movies, shows, added, removed, dirs int, d t
 		p.At = time.Now()
 	}
 	p.Movies, p.Shows, p.Added, p.Removed, p.Dirs, p.Ms = movies, shows, added, removed, dirs, d.Milliseconds()
+	p.Titles = s.pendingTitles
+	if len(p.Titles) > 50 {
+		p.Titles = p.Titles[:50]
+	}
+	s.pendingTitles = nil
 	s.pushPass(p)
 	s.pendingScan = watchPass{}
 	s.mu.Unlock()
+}
+
+// noteTitleChanges : titres touchés par un rechargement ciblé (surveillance).
+func (s *statsStore) noteTitleChanges(cs []titleChange) {
+	if len(cs) == 0 {
+		return
+	}
+	now := time.Now()
+	s.mu.Lock()
+	for i := range cs {
+		cs[i].At = now
+	}
+	s.pendingTitles = cs
+	s.changes = append(s.changes, cs...)
+	if len(s.changes) > changesMax {
+		s.changes = append(s.changes[:0:0], s.changes[len(s.changes)-changesMax:]...)
+	}
+	s.changesDirty = true
+	s.mu.Unlock()
+}
+
+// recentChanges : les n derniers titres modifiés, du plus récent au plus ancien.
+func (s *statsStore) recentChanges(n int) []titleChange {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if n <= 0 || n > len(s.changes) {
+		n = len(s.changes)
+	}
+	out := make([]titleChange, 0, n)
+	for i := len(s.changes) - 1; i >= 0 && len(out) < n; i-- {
+		out = append(out, s.changes[i])
+	}
+	return out
 }
 
 func (s *statsStore) pushPass(p watchPass) {
@@ -467,6 +523,34 @@ func (s *statsStore) loadHistory(path string) {
 	s.trimLocked()
 }
 
+func (s *statsStore) loadChanges(path string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.changesPath = path
+	if b, err := os.ReadFile(path); err == nil {
+		_ = json.Unmarshal(b, &s.changes)
+	}
+}
+
+func (s *statsStore) saveChanges() {
+	s.mu.Lock()
+	if !s.changesDirty || s.changesPath == "" {
+		s.mu.Unlock()
+		return
+	}
+	b, err := json.Marshal(s.changes)
+	s.changesDirty = false
+	path := s.changesPath
+	s.mu.Unlock()
+	if err != nil {
+		return
+	}
+	tmp := path + ".tmp"
+	if os.WriteFile(tmp, b, 0o600) == nil {
+		_ = os.Rename(tmp, path)
+	}
+}
+
 func (s *statsStore) saveHistory() {
 	s.mu.Lock()
 	if !s.dirty || s.histPath == "" {
@@ -512,6 +596,7 @@ func (s *statsStore) sampleLoop() {
 		s.rt = rt
 		s.mu.Unlock()
 		s.saveHistory()
+		s.saveChanges()
 		time.Sleep(10 * time.Second)
 	}
 }

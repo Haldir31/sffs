@@ -26,6 +26,7 @@
     <nav class="tabs" role="tablist">
       <button role="tab" data-tab="dashboard" aria-selected="true">Tableau de bord</button>
       <button role="tab" data-tab="plays">Lectures</button>
+      <button role="tab" data-tab="changes">Nouveautés</button>
       <button role="tab" data-tab="config">Configuration</button>
     </nav>
     <div class="top-right">
@@ -110,6 +111,38 @@
           <table class="plays">
             <thead><tr><th>Heure</th><th>Titre</th><th>Résultat</th><th>Version lue</th><th class="num">Position</th><th class="num" title="Délai d'obtention du lien AllDebrid">Lien</th><th class="num" title="Ouverture du fichier jusqu'aux premiers octets">1er octet</th><th class="num" title="Lectures de plus de 500 ms : nombre et durée totale">Blocages</th><th class="num">Données lues</th></tr></thead>
             <tbody id="plays"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-changes" class="tab" hidden>
+      <div class="tiles" id="chg-tiles"></div>
+      <div class="card">
+        <div class="toolbar">
+          <input id="chg-search" type="search" placeholder="Rechercher un titre…" aria-label="Rechercher un titre">
+          <select id="chg-state" aria-label="État">
+            <option value="">Tous les changements</option>
+            <option value="nouveau">Nouveaux titres</option>
+            <option value="modifié">Titres modifiés</option>
+            <option value="retiré">Titres retirés</option>
+          </select>
+          <select id="chg-kind" aria-label="Type">
+            <option value="">Films et séries</option>
+            <option value="film">Films</option>
+            <option value="série">Séries</option>
+          </select>
+          <select id="chg-period" aria-label="Période">
+            <option value="1">24 heures</option>
+            <option value="7" selected>7 jours</option>
+            <option value="30">30 jours</option>
+          </select>
+        </div>
+        <p class="muted small">Titres ajoutés, complétés ou retirés par la surveillance de StreamFusion (toutes les minutes). Le rechargement complet quotidien n'y figure pas.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Heure</th><th>Titre</th><th>Type</th><th>Changement</th><th class="num">Fichiers ajoutés</th><th class="num">Retirés</th></tr></thead>
+            <tbody id="changes"></tbody>
           </table>
         </div>
       </div>

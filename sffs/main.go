@@ -1020,9 +1020,15 @@ func (n *rootNode) applyPartial(ctx context.Context, movies []*movie, shows []*s
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	defer func() { stats.noteTree(added, removed, len(n.movieDirs), len(n.showDirs)) }()
+	var details []titleChange // titres touchés, pour l'interface
+	defer func() { stats.noteTitleChanges(details) }()
+	note := func(kind, dir string, a, r int, state string) {
+		details = append(details, titleChange{Kind: kind, Dir: dir, Added: a, Removed: r, State: state})
+	}
 	seen := map[int64]bool{}
 	for _, m := range movies {
 		seen[m.tmdb] = true
+		_, existed := n.movieDirs[m.tmdb]
 		if !n.pinMovie(m, nil) {
 			continue
 		}
@@ -1030,13 +1036,16 @@ func (n *rootNode) applyPartial(ctx context.Context, movies []*movie, shows []*s
 		added, removed = added+a, removed+r
 		if a+r > 0 {
 			changed = append(changed, "films/"+m.dirName)
+			note("film", m.dirName, a, r, map[bool]string{true: "modifié", false: "nouveau"}[existed])
 		}
 	}
 	for _, id := range mids {
 		if name, ok := n.movieDirs[id]; ok && !seen[id] {
-			removed += n.removeDir(n.films, name)
+			r := n.removeDir(n.films, name)
+			removed += r
 			delete(n.movieDirs, id)
 			changed = append(changed, "films/"+name)
+			note("film", name, 0, r, "retiré")
 		}
 	}
 	if n.series == nil {
@@ -1045,6 +1054,7 @@ func (n *rootNode) applyPartial(ctx context.Context, movies []*movie, shows []*s
 	seen = map[int64]bool{}
 	for _, sh := range shows {
 		seen[sh.tmdb] = true
+		_, existed := n.showDirs[sh.tmdb]
 		if !n.pinShow(sh, nil) {
 			continue
 		}
@@ -1052,13 +1062,16 @@ func (n *rootNode) applyPartial(ctx context.Context, movies []*movie, shows []*s
 		added, removed = added+a, removed+r
 		if a+r > 0 {
 			changed = append(changed, "series/"+sh.dirName)
+			note("série", sh.dirName, a, r, map[bool]string{true: "modifié", false: "nouveau"}[existed])
 		}
 	}
 	for _, id := range sids {
 		if name, ok := n.showDirs[id]; ok && !seen[id] {
-			removed += n.removeDir(n.series, name)
+			r := n.removeDir(n.series, name)
+			removed += r
 			delete(n.showDirs, id)
 			changed = append(changed, "series/"+name)
+			note("série", name, 0, r, "retiré")
 		}
 	}
 	return

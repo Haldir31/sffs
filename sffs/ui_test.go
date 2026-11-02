@@ -198,3 +198,24 @@ func TestSessionMatches(t *testing.T) {
 		t.Errorf("client : %+v", c)
 	}
 }
+
+func TestTitleChanges(t *testing.T) {
+	s := &statsStore{current: map[string]*playEvent{}}
+	s.noteWatchCheck(3, 2, "ciblé")
+	s.noteTitleChanges([]titleChange{{Kind: "film", Dir: "A (2020) {tmdb-1}", State: "nouveau", Added: 3}, {Kind: "série", Dir: "B {tmdb-2}", State: "retiré", Removed: 9}})
+	s.noteWatchApply(1, 1, 3, 9, 2, time.Second)
+	if len(s.passes) != 1 || len(s.passes[0].Titles) != 2 || s.passes[0].Titles[0].At.IsZero() {
+		t.Fatalf("passage : %+v", s.passes)
+	}
+	if c := s.recentChanges(1); len(c) != 1 || c[0].Dir != "B {tmdb-2}" {
+		t.Fatalf("derniers changements : %+v", c)
+	}
+	path := filepath.Join(t.TempDir(), "c.json")
+	s.changesPath = path
+	s.saveChanges()
+	s2 := &statsStore{}
+	s2.loadChanges(path)
+	if len(s2.changes) != 2 {
+		t.Fatalf("relu : %+v", s2.changes)
+	}
+}
