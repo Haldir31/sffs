@@ -19,6 +19,8 @@ les lit. Les octets ne sont lus chez AllDebrid qu'au moment d'une lecture.
 - **Mises à jour** : `SFFS_WATCH` (1 min) lit les nouveautés de StreamFusion et demande à Silo un
   scan ciblé par dossier (`POST /api/v2/scan`, clé d'API admin `SFFS_SILO_KEY`) ;
   `SFFS_RELOAD` (24 h) recharge tout, arbre FUSE modifié sur place.
+- **Interface web** (`SFFS_UI`, `ui.go`, `stats.go`, page dans `sffs/ui/` intégrée au binaire) : tableau de
+  bord, historique des lectures, réglages en lecture seule. Mot de passe obligatoire (créé dans `ui-password` sinon).
 - **Téléchargements** : AllDebrid refuse (503 / `NO_SERVER`) les adresses de datacenter.
   StreamFusion passe par le proxy WARP ; sffs aussi via `SFFS_DEBRID_PROXY` (SSDV2 : repris de
   `PROXY_URL` de StreamFusion). Symptôme d'un WARP mort : « 0 en cache » partout.

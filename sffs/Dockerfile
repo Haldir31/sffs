@@ -7,6 +7,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY *.go ./
+COPY ui ./ui
 RUN go build -trimpath -ldflags="-s -w" -o /sffs .
 
 FROM debian:trixie-slim

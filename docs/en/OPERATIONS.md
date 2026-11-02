@@ -34,6 +34,21 @@ In the Silo logs:
   for one hour).
 - `playback plan decided … outcome=terminal reason=…`: playback refused, with the reason and `file_id`.
 
+## Web interface
+
+With `SFFS_UI=127.0.0.1:27462`, sffs serves a read-only interface:
+- **Dashboard**: exposed files, last load and reload, StreamFusion watch passes (files added and removed),
+  scans requested from Silo (pending, refused, rate limit hit), AllDebrid cache verdicts, community cache,
+  guard refusals, sffs memory and CPU.
+- **Playbacks**: every playback started by Silo, with its outcome (cached, substituted, community, not
+  cached), the version actually played, the time to get the AllDebrid link and the data read.
+- **Configuration**: every active setting, secrets masked. To change one, edit `sffs.env` and restart sffs.
+
+The password comes from `SFFS_UI_PASSWORD`; otherwise sffs creates one on first start, in `ui-password`
+next to `SFFS_KNOWN_CACHE` (`cat ~/sffs-stack/run/ui-password`). It is required even when listening locally:
+on a shared server, other users can reach `127.0.0.1`. For outside access, use an HTTPS reverse proxy
+(Traefik, the seedbox's app proxy…).
+
 ## Quick checks
 
 ```bash

@@ -37,7 +37,7 @@ Côté ressources :
 
 | Chemin | Contenu |
 |---|---|
-| `sffs/` | Code Go de sffs et son `Dockerfile` |
+| `sffs/` | Code Go de sffs, son interface web (`sffs/ui/`) et son `Dockerfile` |
 | `silo/` | 10 patchs à appliquer sur Silo officiel au commit `silo/BASE_COMMIT`, et le `Dockerfile` de l'image modifiée |
 | `build-images.sh` | Construit les images `localhost/sffs` et `localhost/silo-sffs` (Docker ou Podman) |
 | `docker/` | `compose.yml` pour Docker sans SSDV2 |

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sffs</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233b6fd8'/%3E%3Cpath d='M9 11h14M9 16h14M9 21h9' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script src="app.js" defer></script>
+</head>
+<body>
+<div id="login" class="login" hidden>
+  <form id="login-form" class="login-card">
+    <div class="brand"><span class="logo" aria-hidden="true"></span>sffs</div>
+    <p class="muted">Films et séries de StreamFusion pour Silo</p>
+    <label for="password">Mot de passe</label>
+    <input id="password" type="password" autocomplete="current-password" required autofocus>
+    <button type="submit">Se connecter</button>
+    <p id="login-error" class="error" role="alert"></p>
+  </form>
+</div>
+
+<div id="app" hidden>
+  <header class="top">
+    <div class="brand"><span class="logo" aria-hidden="true"></span>sffs</div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="dashboard" aria-selected="true">Tableau de bord</button>
+      <button role="tab" data-tab="plays">Lectures</button>
+      <button role="tab" data-tab="config">Configuration</button>
+    </nav>
+    <div class="top-right">
+      <span id="phase" class="badge"></span>
+      <button id="logout" class="ghost" title="Se déconnecter">Déconnexion</button>
+    </div>
+  </header>
+
+  <main>
+    <p id="stale" class="banner" hidden>Connexion à sffs perdue, nouvel essai…</p>
+
+    <section id="tab-dashboard" class="tab">
+      <div class="tiles" id="tiles"></div>
+      <div class="grid">
+        <article class="card">
+          <h2>Catalogue</h2>
+          <dl class="kv" id="catalog"></dl>
+        </article>
+        <article class="card">
+          <h2>Lectures et cache AllDebrid</h2>
+          <dl class="kv" id="cache"></dl>
+        </article>
+        <article class="card wide">
+          <div class="card-head">
+            <h2>Suivi de StreamFusion</h2>
+            <span class="muted" id="watch-summary"></span>
+          </div>
+          <div class="chart" id="watch-chart" aria-hidden="true"></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Heure</th><th>Contrôle</th><th class="num">Titres modifiés</th><th class="num">Films</th><th class="num">Séries</th><th class="num">Fichiers ajoutés</th><th class="num">Retirés</th><th class="num">Durée</th></tr></thead>
+              <tbody id="passes"></tbody>
+            </table>
+          </div>
+        </article>
+        <article class="card">
+          <h2>Scans demandés à Silo</h2>
+          <dl class="kv" id="silo"></dl>
+        </article>
+        <article class="card">
+          <h2>Ressources de sffs</h2>
+          <dl class="kv" id="runtime"></dl>
+        </article>
+        <article class="card wide">
+          <h2>Refus récents</h2>
+          <p class="muted small">Ouvertures bloquées par le garde-fou (rien n'est demandé à AllDebrid) et dossiers refusés par Silo.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Heure</th><th>Fichier ou dossier</th><th>Raison</th></tr></thead>
+              <tbody id="refused"></tbody>
+            </table>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="tab-plays" class="tab" hidden>
+      <div class="tiles" id="play-tiles"></div>
+      <div class="card">
+        <div class="toolbar">
+          <input id="play-search" type="search" placeholder="Rechercher un titre…" aria-label="Rechercher un titre">
+          <select id="play-filter" aria-label="Filtrer par résultat">
+            <option value="">Tous les résultats</option>
+            <option value="cache">En cache</option>
+            <option value="substitution">Remplacées</option>
+            <option value="community">Cache communautaire</option>
+            <option value="uncached">Hors cache</option>
+            <option value="denied">Démenties</option>
+          </select>
+          <select id="play-period" aria-label="Période">
+            <option value="1">24 heures</option>
+            <option value="7" selected>7 jours</option>
+            <option value="30">30 jours</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table class="plays">
+            <thead><tr><th>Heure</th><th>Titre</th><th>Résultat</th><th>Version lue</th><th class="num">Lien</th><th class="num">Données lues</th></tr></thead>
+            <tbody id="plays"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-config" class="tab" hidden>
+      <p class="muted">Réglages actifs de sffs, en lecture seule. Les secrets sont masqués. Pour en changer un, modifier le fichier d'environnement de sffs puis le redémarrer.</p>
+      <div id="config"></div>
+    </section>
+  </main>
+  <footer class="foot muted small" id="foot"></footer>
+</div>
+</body>
+</html>

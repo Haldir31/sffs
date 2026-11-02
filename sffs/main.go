@@ -28,6 +28,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"path/filepath"
 	"regexp"
 	"runtime/debug"
 	"sort"
@@ -878,6 +879,7 @@ func (r *resolver) resolve(ctx context.Context, v *version, fresh bool) (string,
 		return "", fmt.Errorf("streamfusion: statut %d", resp.StatusCode)
 	}
 	log.Printf("resolve %s (%s) -> %s en %s", v.id, v.infoHash[:8], hostOf(final), time.Since(t0).Round(time.Millisecond))
+	stats.noteResolve(v.id, hostOf(final), time.Since(t0))
 	r.mu.Lock()
 	r.cache[v.id] = resolved{url: final, at: time.Now()}
 	r.mu.Unlock()
@@ -953,6 +955,7 @@ func (n *rootNode) OnAdd(ctx context.Context) {
 func (n *rootNode) apply(ctx context.Context, movies []*movie, shows []*show, notify bool) (added, removed int, changed []string) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+	defer func() { stats.noteTree(added, removed, len(n.movieDirs), len(n.showDirs)) }()
 	want := map[string]bool{}
 	for _, m := range movies {
 		if !n.pinMovie(m, want) {
@@ -1008,6 +1011,7 @@ func (n *rootNode) apply(ctx context.Context, movies []*movie, shows []*show, no
 func (n *rootNode) applyPartial(ctx context.Context, movies []*movie, shows []*show, mids, sids []int64) (added, removed int, changed []string) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+	defer func() { stats.noteTree(added, removed, len(n.movieDirs), len(n.showDirs)) }()
 	seen := map[int64]bool{}
 	for _, m := range movies {
 		seen[m.tmdb] = true
@@ -1188,10 +1192,12 @@ func (n *rootNode) reloadLoop(every time.Duration, silo *siloNotifier) {
 		movies, shows, err := loadAll(ctx, n.st.cfg)
 		if err != nil {
 			log.Printf("rechargement : %v (arborescence inchangée)", err)
+			stats.noteReload(0, 0, 0, time.Since(t0), err)
 			continue
 		}
 		added, removed, changed := n.apply(ctx, movies, shows, true)
 		log.Printf("rechargement : %d fichiers ajoutés, %d retirés, %d dossiers modifiés en %s", added, removed, len(changed), time.Since(t0).Round(time.Second))
+		stats.noteReload(added, removed, len(changed), time.Since(t0), nil)
 		silo.add(changed)
 		movies, shows = nil, nil
 		debug.FreeOSMemory()
@@ -1256,7 +1262,9 @@ func (f *fileNode) Getxattr(ctx context.Context, attr string, dest []byte) (uint
 		}
 	case "user.sf.arm":
 		if !f.st.isArmed(f.v.id) {
-			log.Printf("arm %s %q (par %s)", f.v.id, f.v.name, callerComm(ctx))
+			comm := callerComm(ctx)
+			log.Printf("arm %s %q (par %s)", f.v.id, f.v.name, comm)
+			stats.playStart(f.v.id, f.Path(nil), comm)
 			f.st.arm(f.v.id)
 			if !f.v.sizeExact {
 				f.learnSize(ctx)
@@ -1345,10 +1353,12 @@ func (f *fileNode) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint3
 	comm := callerComm(ctx)
 	if !f.st.isArmed(f.v.id) {
 		log.Printf("refus open %s %q par %s : non armé", f.v.id, f.v.name, comm)
+		stats.noteOpenRefused(f.v.name, comm, "ouverture sans armement")
 		return nil, 0, syscall.EACCES
 	}
 	if !f.st.cfg.allowComm.MatchString(comm) {
 		log.Printf("refus open %s par %s : processus non autorisé", f.v.id, comm)
+		stats.noteOpenRefused(f.v.name, comm, "programme non autorisé")
 		return nil, 0, syscall.EACCES
 	}
 	return &handle{st: f.st, v: f.v}, fuse.FOPEN_DIRECT_IO, 0
@@ -1424,11 +1434,15 @@ func (h *handle) Read(ctx context.Context, dest []byte, off int64) (fuse.ReadRes
 		if h.body == nil || off != h.pos {
 			if err := h.openAt(ctx, off); err != nil {
 				log.Printf("lecture %s offset %d : %v", h.v.id, off, err)
+				stats.noteReadError(h.v.id, err)
 				return nil, syscall.EIO
 			}
 		}
 		n, err := io.ReadFull(h.body, dest[:want])
 		h.pos += int64(n)
+		if n > 0 {
+			stats.noteRead(h.v.id, n)
+		}
 		if err == nil || (n > 0 && (errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF))) {
 			return fuse.ReadResultData(dest[:n]), 0
 		}
@@ -1475,6 +1489,7 @@ func loadAll(ctx context.Context, cfg config) ([]*movie, []*show, error) {
 		log.Printf("%d séries, %d épisodes, %d versions d'épisodes chargés en %s", len(shows), ne, nsv, time.Since(t1).Round(time.Millisecond))
 	}
 	initOrig(movies, shows)
+	stats.noteLoad(movies, shows, time.Since(t0))
 	return movies, shows, nil
 }
 
@@ -1491,6 +1506,8 @@ func main() {
 	configureCommunity()
 
 	wc := loadWatchConfig()
+	stats.watchEvery = wc.every
+	ui := startUI(cfg, wc, filepath.Dir(knownPath))
 	wm, err := watermark(ctx, cfg.dsn) // avant le chargement : rien n'est perdu entre les deux
 	if err != nil {
 		log.Fatal(err)
@@ -1553,6 +1570,8 @@ func main() {
 		log.Fatalf("montage %s: %v", cfg.mount, err)
 	}
 	log.Printf("monté sur %s", cfg.mount)
+	stats.setPhase("monté")
+	ui.setState(st)
 	go silo.libraryLoop(cfg.series)
 	go silo.healLoop(5 * time.Minute)
 	go selfCheck(cfg.mount)

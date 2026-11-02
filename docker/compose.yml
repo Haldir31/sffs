@@ -25,6 +25,10 @@ services:
       SFFS_SILO_URL: http://silo:8080
       SFFS_SILO_FILMS: /mnt/sf/films
       SFFS_SILO_SERIES: /mnt/sf/series
+      # Interface web ; mot de passe créé dans data/sffs/ui-password (ou SFFS_UI_PASSWORD dans .env).
+      SFFS_UI: 0.0.0.0:8090
+    ports:
+      - 127.0.0.1:${SFFS_UI_PORT:-27462}:8090
     volumes:
       # Le montage FUSE remonte vers l'hôte (rshared), puis redescend dans Silo (rslave).
       - ${SFFS_HOST_MOUNT:-/mnt/sffs}:/mnt/sffs:rshared

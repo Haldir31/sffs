@@ -98,6 +98,9 @@
 | `SFFS_SILO_LIBRARIES` | `1` : créer les bibliothèques Films et Séries dans Silo, une seule fois (repère : `SFFS_SILO_LIBRARIES_DONE`) | |
 | `SFFS_SILO_LIBRARIES_LANG`, `SFFS_SILO_FILMS_NAME`, `SFFS_SILO_SERIES_NAME` | Langue des métadonnées et noms des bibliothèques créées | `fr`, `Films`, `Séries` |
 | `SFFS_SILO_FILMS`, `SFFS_SILO_SERIES` | Chemins des dossiers vus par Silo | `/mnt/sf/films`, `/mnt/sf/series` (SSDV2 : `/mnt/sffs/films`, `/mnt/sffs/series`) |
+| `SFFS_UI` | Adresse d'écoute de l'interface web, ex. `127.0.0.1:27462` (vide = pas d'interface) | |
+| `SFFS_UI_PASSWORD`, `SFFS_UI_PASSWORD_FILE` | Mot de passe de l'interface, ou fichier qui le contient. Sans l'un ni l'autre, sffs en crée un dans `ui-password`, à côté de `SFFS_KNOWN_CACHE` | |
+| `SFFS_UI_HISTORY` | Historique des lectures (30 jours, 2 000 lectures au plus) | `play-history.json` à côté de `SFFS_KNOWN_CACHE` |
 | `SFFS_DRY_RUN`, `SFFS_DRY_LIST` | Charger sans monter, et lister les versions retenues | |
 
 Le service de lecture est fixé sur AllDebrid (`"service":"AD"` dans `playbackURL`, `sffs/main.go`).

@@ -226,6 +226,7 @@ func changedSince(ctx context.Context, dsn string, wm int64, fps map[titleKey]ti
 		}
 		log.Printf("surveillance : %d titres réécrits dans StreamFusion, %d avec des sources modifiées (contrôle %s)",
 			len(touched), len(changed), mode)
+		stats.noteWatchCheck(len(touched), len(changed), mode)
 	}
 	for k := range changed {
 		if k.series {
@@ -245,6 +246,7 @@ func (n *rootNode) watchLoop(wc watchConfig, wm int64, fps map[titleKey]titleFP,
 	for range time.Tick(wc.every) {
 		ctx := context.Background()
 		mids, sids, newWM, err := changedSince(ctx, cfg.dsn, wm, fps)
+		stats.noteWatchRun(err)
 		if err != nil {
 			log.Printf("surveillance : %v", err)
 			continue
@@ -279,6 +281,7 @@ func (n *rootNode) watchLoop(wc watchConfig, wm int64, fps map[titleKey]titleFP,
 			}
 			initOrig(movies, shows)
 			added, removed, changed := n.applyPartial(ctx, movies, shows, mids, sids)
+			stats.noteWatchApply(len(mids), len(sids), added, removed, len(changed), time.Since(t0))
 			if added+removed > 0 {
 				log.Printf("surveillance : %d films et %d séries modifiés dans StreamFusion -> %d fichiers ajoutés, %d retirés, %d dossiers (%s)",
 					len(mids), len(sids), added, removed, len(changed), time.Since(t0).Round(time.Millisecond))
@@ -330,7 +333,11 @@ type siloNotifier struct {
 }
 
 func newSiloNotifier(wc watchConfig) *siloNotifier {
-	return &siloNotifier{wc: wc, http: &http.Client{Timeout: 30 * time.Second}, pending: map[string]bool{}}
+	s := &siloNotifier{wc: wc, http: &http.Client{Timeout: 30 * time.Second}, pending: map[string]bool{}}
+	stats.mu.Lock()
+	stats.silo.Enabled = s.enabled()
+	stats.mu.Unlock()
+	return s
 }
 
 func (s *siloNotifier) enabled() bool { return s != nil && s.wc.siloURL != "" && s.key() != "" }
@@ -375,6 +382,7 @@ func (s *siloNotifier) flush(ctx context.Context) {
 	}
 	s.mu.Unlock()
 	if len(dirs) == 0 {
+		stats.noteSilo(0, 0, false, 0, nil)
 		return
 	}
 	sort.Strings(dirs)
@@ -395,8 +403,14 @@ func (s *siloNotifier) flush(ctx context.Context) {
 			paths = append(paths, s.wc.siloSeries)
 		}
 	}
-	ok, failed := 0, 0
+	ok, failed, sent, limited := 0, 0, 0, false
 	var lastErr error
+	defer func() {
+		s.mu.Lock()
+		pending := len(s.pending)
+		s.mu.Unlock()
+		stats.noteSilo(sent, failed, limited, pending, lastErr)
+	}()
 	if paths != nil { // scan de bibliothèque : tout ou rien
 		for _, p := range paths {
 			if err := s.scan(ctx, p); err != nil {
@@ -405,6 +419,7 @@ func (s *siloNotifier) flush(ctx context.Context) {
 			}
 		}
 		if failed == 0 {
+			sent = len(paths)
 			s.mu.Lock()
 			for _, d := range dirs {
 				delete(s.pending, d)
@@ -416,6 +431,7 @@ func (s *siloNotifier) flush(ctx context.Context) {
 		for _, d := range dirs {
 			if err := s.scan(ctx, s.siloPath(d)); err != nil {
 				if errors.Is(err, errRateLimited) {
+					limited = true
 					log.Printf("silo : %d scans ciblés demandés, limite de requêtes atteinte, %d restants pour le prochain passage", ok, len(dirs)-ok-failed)
 					ok = 0 // déjà journalisé
 					break
@@ -425,6 +441,7 @@ func (s *siloNotifier) flush(ctx context.Context) {
 				continue
 			}
 			ok++
+			sent++
 			s.mu.Lock()
 			delete(s.pending, d)
 			s.mu.Unlock()
@@ -461,6 +478,7 @@ func (s *siloNotifier) scan(ctx context.Context, p string) error {
 	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusUnprocessableEntity {
 		// Dossier inconnu de Silo (déjà disparu…) : inutile de réessayer, le scan nocturne s'en charge.
 		log.Printf("silo : scan de %s refusé (statut %d), abandonné", p, resp.StatusCode)
+		stats.noteSiloRefused(p, resp.StatusCode)
 		return nil
 	}
 	if resp.StatusCode == http.StatusTooManyRequests {

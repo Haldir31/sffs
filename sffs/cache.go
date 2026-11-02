@@ -122,6 +122,7 @@ func (r *resolver) cached(ctx context.Context, v *version) bool {
 	}
 	e := r.entry(v)
 	if e.err != nil {
+		stats.playStatus(v.id, "list_error", "", "")
 		return false
 	}
 	r.mu.Lock()
@@ -132,9 +133,11 @@ func (r *resolver) cached(ctx context.Context, v *version) bool {
 			v.size, v.sizeExact = v.origSize, v.origExact
 			delete(r.cache, v.id)
 		}
+		stats.playStatus(v.id, "cache", "", "")
 		return true
 	}
 	if v.sub != nil && e.instant[v.sub.hash] {
+		stats.playStatus(v.id, "substitution", v.sub.file, v.sub.bucket)
 		return true
 	}
 	// Pas vérifié par StreamFusion (hors de sa liste) mais vu en cache par la communauté.
@@ -145,6 +148,7 @@ func (r *resolver) cached(ctx context.Context, v *version) bool {
 			delete(r.cache, v.id)
 		}
 		log.Printf("cache communautaire : %s %q joué tel quel (non vérifié par StreamFusion)", v.id, v.name)
+		stats.playStatus(v.id, "community", "", "")
 		return true
 	}
 	// Un REMUX hors cache est remplacé d'abord par un autre REMUX en cache de même qualité.
@@ -155,6 +159,7 @@ func (r *resolver) cached(ctx context.Context, v *version) bool {
 			v.sub = &s
 			v.sizeExact = false
 			delete(r.cache, v.id)
+			stats.playStatus(v.id, "substitution", s.file, s.bucket)
 			return true
 		}
 	}
@@ -173,9 +178,11 @@ func (r *resolver) cached(ctx context.Context, v *version) bool {
 			v.sub = &s
 			v.sizeExact = false // taille réelle apprise juste après
 			delete(r.cache, v.id)
+			stats.playStatus(v.id, "substitution", s.file, b)
 			return true
 		}
 	}
+	stats.playStatus(v.id, "uncached", "", "")
 	return false
 }
 
@@ -250,6 +257,7 @@ func (r *resolver) markUncached(v *version) {
 	}
 	r.mu.Unlock()
 	community.drop(hash) // démenti par la lecture
+	stats.playStatus(v.id, "denied", "", "")
 	r.cc.mu.Lock()
 	if e := r.cc.entries[kind+"/"+id]; e != nil {
 		select {
@@ -268,9 +276,11 @@ func (r *resolver) markUncached(v *version) {
 
 var resInName = regexp.MustCompile(`(?i)(2160p|4k|1080p|720p|576p|480p)`)
 
-func (cc *cacheChecker) fetch(cfg config, kind, id string) ([]streamSrc, error) {
+func (cc *cacheChecker) fetch(cfg config, kind, id string) (_ []streamSrc, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
+	t0 := time.Now()
+	defer func() { stats.noteList(time.Since(t0), err) }()
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/%s/stream/%s/%s.json", cfg.base, cfg.streamCfg, kind, id), nil)
 	resp, err := cc.client.Do(req)
 	if err != nil {
@@ -296,8 +306,8 @@ func (cc *cacheChecker) fetch(cfg config, kind, id string) ([]streamSrc, error) 
 	var out []streamSrc
 	for _, s := range d.Streams {
 		h := strings.ToLower(strings.TrimSpace(s.InfoHash))
-		u, err := url.Parse(s.URL)
-		if h == "" || err != nil || !strings.HasPrefix(u.Path, "/playback/") {
+		u, perr := url.Parse(s.URL)
+		if h == "" || perr != nil || !strings.HasPrefix(u.Path, "/playback/") {
 			continue
 		}
 		b := "unknown"
