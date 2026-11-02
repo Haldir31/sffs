@@ -124,6 +124,7 @@ The playback service is fixed to AllDebrid (`"service":"AD"` in `playbackURL`, `
 | 0007 | Estimated bitrate (size and runtime) for the lower version offered in a 4K title's quality menu: without it the Silo Apple TV app rejected the answer (`keyNotFound: bitrateKbps`); the entry is left out when no estimate is possible |
 | 0008 | A sffs version that is not cached is refused with the `source_not_cached` reason and a French message ("not available at AllDebrid right now") instead of `source_unreadable` ("empty or damaged file"); falling back to another version is unchanged |
 | 0009 | During a scan, a series root is queued for matching only at its first file (instead of once per file, each call re-reading every file of the series); the queue sync at the end of the scan does the rest. Needed with `SFFS_ALL_VERSIONS` (series with tens of thousands of versions) |
+| 0010 | An unchanged sffs file (size and date) is no longer rewritten on every scan: its missing duration, only known after first playback, marked it "probe repair" on every pass although it cannot be probed during a scan. Silo's nightly scan no longer reprocesses millions of versions |
 
 The patches change nothing outside `SILO_SF_ROOT`: other libraries behave as in official Silo. Exception: 0009, a performance fix that applies to every series library.
 

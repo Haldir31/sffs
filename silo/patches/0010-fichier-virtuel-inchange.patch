@@ -1,0 +1,92 @@
+From c9c7bc05a6ecd7aadc7b0d9d28fa488d7cc0e06c Mon Sep 17 00:00:00 2001
+From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
+Date: Mon, 2 Nov 2026 03:33:49 +0000
+Subject: [PATCH] =?UTF-8?q?sffs=20:=20un=20fichier=20virtuel=20inchang?=
+ =?UTF-8?q?=C3=A9=20n'est=20plus=20r=C3=A9=C3=A9crit=20=C3=A0=20chaque=20s?=
+ =?UTF-8?q?can?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Sans durée connue (elle vient à la première lecture), un fichier sffs était marqué
+probe_repair à chaque scan et sa ligne réécrite, alors qu'il ne peut pas être analysé
+au scan. Le scan nocturne retraitait ainsi les 6,4 millions de versions.
+---
+ internal/scanner/scanner.go                | 13 +++++++--
+ internal/scanner/sffs_probe_repair_test.go | 33 ++++++++++++++++++++++
+ 2 files changed, 44 insertions(+), 2 deletions(-)
+ create mode 100644 internal/scanner/sffs_probe_repair_test.go
+
+diff --git a/internal/scanner/scanner.go b/internal/scanner/scanner.go
+index 42b2740ed..5161fdedf 100644
+--- a/internal/scanner/scanner.go
++++ b/internal/scanner/scanner.go
+@@ -3067,8 +3067,11 @@ func (s *Scanner) processFile(
+ 	// without forcing endless rewrites on nodes that cannot probe.
+ 	if existing, ok := existingByPath[filePath]; ok {
+ 		currentExternalSubtitlePaths := externalSubtitleInfoPaths(loadExternalSubs())
+-		updateReasons := scanStateUpdateReasons(existing, fileSize, fileModifiedAt, currentExternalSubtitlePaths, externalSubsChecked, assignment, groupAssignment, folder.Type, s.ffprobePath != "")
+-		if shouldSkipStableConfirmedScanState(existing, existingContentStatuses[existing.ContentID], fileSize, fileModifiedAt, updateReasons, s.ffprobePath != "") {
++		// sffs : un fichier virtuel n'est jamais analysé au scan (sa durée vient à la première
++		// lecture) ; sans cela, l'absence de durée le ferait réécrire à chaque scan.
++		canRepairProbe := s.canRepairProbeAtScan(filePath)
++		updateReasons := scanStateUpdateReasons(existing, fileSize, fileModifiedAt, currentExternalSubtitlePaths, externalSubsChecked, assignment, groupAssignment, folder.Type, canRepairProbe)
++		if shouldSkipStableConfirmedScanState(existing, existingContentStatuses[existing.ContentID], fileSize, fileModifiedAt, updateReasons, canRepairProbe) {
+ 			return actionUnchanged, nil, nil
+ 		}
+ 		if len(updateReasons) == 0 {
+@@ -4251,6 +4254,12 @@ func (s *Scanner) clearLegacyLinksForUnmatchableRoots(_ context.Context, _ int,
+ 	return 0, nil
+ }
+ 
++// canRepairProbeAtScan indique si un scan peut analyser ce fichier pour compléter ses infos
++// techniques. Jamais pour un fichier virtuel sffs : il serait lu chez le débrideur.
++func (s *Scanner) canRepairProbeAtScan(filePath string) bool {
++	return s.ffprobePath != "" && !sfvirtual.Under(filePath)
++}
++
+ // gatherHints computes the OSHash for a media file.
+ func (s *Scanner) gatherHints(filePath string) FileHints {
+ 	hints := FileHints{}
+diff --git a/internal/scanner/sffs_probe_repair_test.go b/internal/scanner/sffs_probe_repair_test.go
+new file mode 100644
+index 000000000..06c8bd93e
+--- /dev/null
++++ b/internal/scanner/sffs_probe_repair_test.go
+@@ -0,0 +1,33 @@
++package scanner
++
++import (
++	"slices"
++	"testing"
++	"time"
++)
++
++// Un fichier sffs inchangé sans durée ne doit pas être réécrit à chaque scan.
++func TestSffsVirtualFileNotRewrittenForProbeRepair(t *testing.T) {
++	t.Setenv("SILO_SF_ROOT", "/mnt/sf")
++	s := &Scanner{ffprobePath: "/usr/bin/ffprobe"}
++	mt := time.Unix(1792866265, 0).UTC()
++	existing := &scanStateFile{FileSize: 1000, FileModifiedAt: &mt} // durée 0, jamais analysé
++
++	virtual := "/mnt/sf/series/X (2020) {tmdb-1}/Season 01/X - S01E01 - a.mkv"
++	if s.canRepairProbeAtScan(virtual) {
++		t.Fatal("un fichier sffs ne doit jamais être analysé au scan")
++	}
++	reasons := scanStateUpdateReasons(existing, 1000, mt, nil, true, fileRootAssignment{}, fileGroupAssignment{}, "series", s.canRepairProbeAtScan(virtual))
++	if slices.Contains(reasons, "probe_repair") {
++		t.Fatalf("fichier sffs inchangé : motifs %v, probe_repair inattendu", reasons)
++	}
++
++	local := "/mnt/media/tv/X/Season 01/X.S01E01.mkv"
++	if !s.canRepairProbeAtScan(local) {
++		t.Fatal("un fichier ordinaire reste réparable au scan")
++	}
++	reasons = scanStateUpdateReasons(existing, 1000, mt, nil, true, fileRootAssignment{}, fileGroupAssignment{}, "series", s.canRepairProbeAtScan(local))
++	if !slices.Contains(reasons, "probe_repair") {
++		t.Fatalf("fichier ordinaire sans durée : probe_repair attendu, motifs %v", reasons)
++	}
++}
+-- 
+2.56.0
+

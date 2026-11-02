@@ -25,7 +25,7 @@ les lit. Les octets ne sont lus chez AllDebrid qu'au moment d'une lecture.
 
 ## Silo modifié
 
-`silo/patches/0001…0009` sur `silo/BASE_COMMIT` (Silo officiel), appliqués par
+`silo/patches/0001…0010` sur `silo/BASE_COMMIT` (Silo officiel), appliqués par
 `build-images.sh silo` (clone → checkout BASE → `git am` → image `localhost/silo-sffs`).
 Actifs seulement sous `SILO_SF_ROOT` ; le reste se comporte comme Silo officiel (sauf 0009, correctif de
 performance du scan des séries, valable pour toutes les bibliothèques).
