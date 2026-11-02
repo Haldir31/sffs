@@ -22,6 +22,38 @@ let tab = "dashboard";
 let timer = null;
 let plays = [];
 let configLoaded = false;
+let serverNow = Date.now(); // heure de sffs (les lectures sont datées par lui)
+const lastBytes = new Map(); // id -> {bytes, t} : débit entre deux actualisations
+const rates = new Map();     // id -> octets/s
+
+// Lecture en cours : des données lues dans la dernière minute.
+const isLive = (p, now) => p.last_read && now - new Date(p.last_read) < 60e3;
+
+function trackRates() {
+  for (const p of plays) {
+    if (!isLive(p, serverNow)) { lastBytes.delete(p.id); rates.delete(p.id); continue; }
+    const prev = lastBytes.get(p.id);
+    if (prev && serverNow > prev.t && p.bytes >= prev.bytes) rates.set(p.id, ((p.bytes - prev.bytes) * 1000) / (serverNow - prev.t));
+    lastBytes.set(p.id, { bytes: p.bytes, t: serverNow });
+  }
+}
+
+function renderLive() {
+  const live = plays.filter((p) => isLive(p, serverNow));
+  $("live").hidden = !live.length;
+  $("live-list").innerHTML = live.map((p) => {
+    const t = titleOf(p.path);
+    const [label, cls] = STATUS[p.status || ""] || [p.status, ""];
+    const rate = rates.get(p.id);
+    const version = p.status === "substitution" && p.served ? p.served : t.file;
+    return `<div class="live-row">
+      <div class="live-main"><div class="title">${esc(t.title)}</div><div class="file">${esc(version)}</div></div>
+      <div class="live-meta">${badge(label, cls)}
+        <span><b>${rate !== undefined ? bytes(rate) + "/s" : "…"}</b> <span class="muted">débit</span></span>
+        <span><b>${bytes(p.bytes)}</b> <span class="muted">lus</span></span>
+        <span class="muted">depuis ${esc(timeFmt.format(new Date(p.at)))}</span></div></div>`;
+  }).join("");
+}
 
 // ---------------------------------------------------------------- formats
 
@@ -97,6 +129,7 @@ async function api(path, opts) {
 
 function renderStatus(s) {
   const now = new Date(s.now);
+  renderLive();
   const c = s.counters, rt = s.runtime, cat = s.catalog;
   const ph = $("phase");
   ph.textContent = s.phase === "monté" ? "En service" : "Chargement du catalogue…";
@@ -106,7 +139,9 @@ function renderStatus(s) {
   const ok = day.filter((p) => ["cache", "substitution", "community"].includes(p.status)).length;
   const bytesDay = day.reduce((a, p) => a + (p.bytes || 0), 0);
 
+  const liveN = plays.filter((p) => isLive(p, now)).length;
   $("tiles").innerHTML = [
+    tile("En cours", num(liveN), liveN ? "lecture" + (liveN > 1 ? "s" : "") + " en cours" : "aucune lecture"),
     tile("Fichiers exposés", num(cat.files), `${num(cat.movie_dirs)} films · ${num(cat.show_dirs)} séries`),
     tile("Lectures (24 h)", num(day.length), day.length ? `${Math.round((ok / day.length) * 100)} % lancées sans téléchargement` : "aucune"),
     tile("Données lues (24 h)", bytes(bytesDay), `${bytes(c.bytes_read)} depuis le démarrage`),
@@ -216,7 +251,7 @@ function renderPlays() {
   const q = $("play-search").value.trim().toLowerCase();
   const f = $("play-filter").value;
   const days = +$("play-period").value;
-  const now = Date.now();
+  const now = serverNow;
   const rows = plays.filter((p) => now - new Date(p.at) < days * 86400e3 &&
     (!f || p.status === f) && (!q || p.path.toLowerCase().includes(q)));
 
@@ -241,7 +276,7 @@ function renderPlays() {
     const err = p.errors ? `<div class="error small">${num(p.errors)} erreur(s) : ${esc(p.last_error)}</div>` : "";
     return `<tr><td class="when">${esc(when(p.at))}</td>
       <td><div class="title">${esc(t.title)}</div><div class="file">${esc(t.file)}</div>${err}</td>
-      <td>${badge(label, cls)}</td><td>${served}</td>
+      <td>${badge(label, cls)}${isLive(p, serverNow) ? " " + badge("En cours", "ok") : ""}</td><td>${served}</td>
       <td class="num">${ms(p.resolve_ms)}</td><td class="num">${p.bytes ? bytes(p.bytes) : "–"}</td></tr>`;
   }).join("") : `<tr><td colspan="6" class="empty">Aucune lecture sur cette période</td></tr>`;
 }
@@ -271,6 +306,8 @@ async function refresh() {
   try {
     const [s, p] = await Promise.all([api("/api/status"), api("/api/plays?limit=2000")]);
     plays = p;
+    serverNow = new Date(s.now).getTime();
+    trackRates();
     $("stale").hidden = true;
     renderStatus(s);
     if (tab === "plays") renderPlays();

@@ -185,3 +185,15 @@ td.empty { color: var(--muted); text-align: center; padding: 18px; }
 .cfg-group table { table-layout: fixed; min-width: 640px; }
 .cfg-group th:nth-child(1) { width: 230px; }
 .cfg-group th:nth-child(2) { width: 42%; }
+
+/* Lectures en cours */
+.card.live { margin-bottom: 16px; border-color: var(--ok); }
+.card.live h2 { display: flex; align-items: center; gap: 8px; }
+.pulse { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 0 var(--ok); animation: pulse 1.6s ease-out infinite; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 60%, transparent); } 100% { box-shadow: 0 0 0 9px transparent; } }
+@media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+.live-row { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-top: 1px solid var(--border); flex-wrap: wrap; }
+.live-row:first-child { border-top: 0; }
+.live-main { min-width: 0; flex: 1 1 320px; }
+.live-meta { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+.live-meta b { font-weight: 600; }
