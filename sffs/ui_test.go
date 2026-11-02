@@ -110,13 +110,15 @@ func TestPlayHistory(t *testing.T) {
 	s.playStatus("a", "substitution", "y.mkv", "2160")
 	s.playStatus("a", "substitution", "y.mkv", "2160") // même verdict : compté une fois
 	s.noteResolve("a", "h.debrid.it", 120*time.Millisecond)
-	s.noteRead("a", 1<<20)
-	s.playStatus("inconnu", "cache", "", "") // hors lecture : ignoré
+	s.noteOpen("a", "silo", 42, 10<<20)
+	s.noteRead("a", 1<<20, 1<<20, 10*time.Millisecond)
+	s.noteRead("a", 1<<20, 2<<20, time.Second) // blocage
+	s.playStatus("inconnu", "cache", "", "")   // hors lecture : ignoré
 	if s.c.Substituted != 1 || s.c.Cached != 0 || s.c.Plays != 1 {
 		t.Fatalf("compteurs : %+v", s.c)
 	}
 	p := s.recentPlays(1)[0]
-	if p.Status != "substitution" || p.Served != "y.mkv" || p.ResolveMs != 120 || p.Bytes != 1<<20 {
+	if p.Status != "substitution" || p.Served != "y.mkv" || p.ResolveMs != 120 || p.Bytes != 2<<20 || p.Stalls != 1 || p.Position != 2<<20 || p.Process != "silo" || p.FirstByteMs == 0 {
 		t.Fatalf("lecture : %+v", p)
 	}
 
@@ -166,5 +168,33 @@ func TestPlayStatusIfUnset(t *testing.T) {
 	s.playStatusIfUnset("a", "substitution", "y", "1080") // déjà un verdict : inchangé
 	if p := s.recentPlays(1)[0]; p.Status != "cache" || s.c.Cached != 1 || s.c.Substituted != 0 {
 		t.Fatalf("verdict : %+v %+v", p, s.c)
+	}
+}
+
+func TestSessionMatches(t *testing.T) {
+	armed := time.Now()
+	ip := func(n int) *int { return &n }
+	ep := &version{mediaType: "series", season: 3, episode: 5}
+	dir := "series/Gilmore Girls (2000) {tmdb-4586}/Season 03/Gilmore Girls - S03E05 - x.mkv"
+	s := siloSession{SeriesName: "Gilmore Girls", SeasonNumber: ip(3), EpisodeNumber: ip(5), StartedAt: armed.Add(2 * time.Second)}
+	if !sessionMatches(s, ep, dir, armed) {
+		t.Error("épisode non reconnu")
+	}
+	s.EpisodeNumber = ip(6)
+	if sessionMatches(s, ep, dir, armed) {
+		t.Error("autre épisode accepté")
+	}
+	mv := &version{mediaType: "movie"}
+	m := siloSession{MediaTitle: "L'Été meurtrier", MediaType: "movie", StartedAt: armed}
+	if !sessionMatches(m, mv, "films/L Ete meurtrier (1983) {tmdb-1}/x.mkv", armed) {
+		t.Error("film (accents, ponctuation) non reconnu")
+	}
+	m.StartedAt = armed.Add(-10 * time.Minute)
+	if sessionMatches(m, mv, "films/L Ete meurtrier (1983) {tmdb-1}/x.mkv", armed) {
+		t.Error("session trop ancienne acceptée")
+	}
+	c := clientOf(siloSession{ClientName: "Infuse", ClientVersion: "8.1", Username: "admin", ProfileName: "Enfants", PlayMethod: "direct"})
+	if c.App != "Infuse 8.1" || c.User != "admin (Enfants)" {
+		t.Errorf("client : %+v", c)
 	}
 }

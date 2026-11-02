@@ -36,6 +36,17 @@ type playEvent struct {
 	Errors    int       `json:"errors,omitempty"`
 	LastError string    `json:"last_error,omitempty"`
 	LastRead  time.Time `json:"last_read,omitzero"`
+
+	Client      *playClient `json:"client,omitempty"`  // application et utilisateur, d'après Silo
+	Process     string      `json:"process,omitempty"` // processus qui lit (silo, ffmpeg…)
+	PID         int         `json:"pid,omitempty"`
+	Opens       int         `json:"opens,omitempty"`
+	Size        uint64      `json:"size,omitempty"`
+	Position    int64       `json:"position,omitempty"`      // fin de la dernière lecture
+	FirstByteMs int64       `json:"first_byte_ms,omitempty"` // ouverture -> premiers octets
+	Stalls      int         `json:"stalls,omitempty"`        // lectures de plus de 500 ms
+	StallMs     int64       `json:"stall_ms,omitempty"`
+	openedAt    time.Time
 }
 
 type watchPass struct {
@@ -347,12 +358,47 @@ func (s *statsStore) noteResolve(id, host string, d time.Duration) {
 	}
 }
 
-func (s *statsStore) noteRead(id string, n int) {
+// stallThreshold : une lecture FUSE plus lente compte comme un blocage.
+const stallThreshold = 500 * time.Millisecond
+
+func (s *statsStore) noteRead(id string, n int, end int64, d time.Duration) {
 	s.mu.Lock()
 	s.c.BytesRead += int64(n)
 	if p := s.play(id); p != nil {
+		now := time.Now()
 		p.Bytes += int64(n)
-		p.LastRead = time.Now()
+		p.LastRead = now
+		p.Position = end
+		if p.FirstByteMs == 0 && !p.openedAt.IsZero() {
+			p.FirstByteMs = max(now.Sub(p.openedAt).Milliseconds(), 1)
+		}
+		if d > stallThreshold && p.FirstByteMs > 0 && p.Bytes > int64(n) { // pas la toute première lecture
+			p.Stalls++
+			p.StallMs += d.Milliseconds()
+		}
+		s.dirty = true
+	}
+	s.mu.Unlock()
+}
+
+// noteOpen : ouverture du fichier par un processus autorisé.
+func (s *statsStore) noteOpen(id, process string, pid int, size uint64) {
+	s.mu.Lock()
+	if p := s.play(id); p != nil {
+		p.Opens++
+		p.Process, p.PID, p.Size = process, pid, size
+		if p.openedAt.IsZero() {
+			p.openedAt = time.Now()
+		}
+		s.dirty = true
+	}
+	s.mu.Unlock()
+}
+
+func (s *statsStore) playClient(id string, c playClient) {
+	s.mu.Lock()
+	if p := s.play(id); p != nil {
+		p.Client = &c
 		s.dirty = true
 	}
 	s.mu.Unlock()

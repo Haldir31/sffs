@@ -197,3 +197,11 @@ td.empty { color: var(--muted); text-align: center; padding: 18px; }
 .live-main { min-width: 0; flex: 1 1 320px; }
 .live-meta { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
 .live-meta b { font-weight: 600; }
+.who { color: var(--muted); margin-top: 2px; }
+.who b { color: var(--text); font-weight: 500; }
+.warn-text { color: var(--warn); }
+.pos { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+progress { width: 90px; height: 6px; border: 0; border-radius: 3px; background: var(--surface-2); overflow: hidden; appearance: none; -webkit-appearance: none; }
+progress::-webkit-progress-bar { background: var(--surface-2); border-radius: 3px; }
+progress::-webkit-progress-value { background: var(--accent); border-radius: 3px; }
+progress::-moz-progress-bar { background: var(--accent); border-radius: 3px; }

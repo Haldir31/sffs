@@ -907,6 +907,7 @@ type state struct {
 	cfg   config
 	res   *resolver
 	data  *http.Client
+	silo  *siloNotifier // sessions de Silo (application qui lit), nil avant le montage
 	mu    sync.Mutex
 	armed map[string]time.Time
 }
@@ -1272,6 +1273,7 @@ func (f *fileNode) Getxattr(ctx context.Context, attr string, dest []byte) (uint
 			comm := callerComm(ctx)
 			log.Printf("arm %s %q (par %s)", f.v.id, f.v.name, comm)
 			stats.playStart(f.v.id, f.Path(nil), comm)
+			go f.st.silo.identifyClient(f.v.id, f.v, f.Path(nil), time.Now())
 			f.st.arm(f.v.id)
 			if !f.v.sizeExact {
 				f.learnSize(ctx)
@@ -1341,6 +1343,13 @@ func (f *fileNode) learnSize(ctx context.Context) {
 	f.v.sizeExact = true
 }
 
+func callerPID(ctx context.Context) int {
+	if caller, ok := fuse.FromContext(ctx); ok {
+		return int(caller.Pid)
+	}
+	return 0
+}
+
 func callerComm(ctx context.Context) string {
 	caller, ok := fuse.FromContext(ctx)
 	if !ok {
@@ -1368,6 +1377,7 @@ func (f *fileNode) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint3
 		stats.noteOpenRefused(f.v.name, comm, "programme non autorisé")
 		return nil, 0, syscall.EACCES
 	}
+	stats.noteOpen(f.v.id, comm, callerPID(ctx), f.v.size)
 	return &handle{st: f.st, v: f.v}, fuse.FOPEN_DIRECT_IO, 0
 }
 
@@ -1437,6 +1447,7 @@ func (h *handle) Read(ctx context.Context, dest []byte, off int64) (fuse.ReadRes
 	if off+want > size {
 		want = size - off
 	}
+	t0 := time.Now()
 	for attempt := 0; attempt < 2; attempt++ {
 		if h.body == nil || off != h.pos {
 			if err := h.openAt(ctx, off); err != nil {
@@ -1448,7 +1459,7 @@ func (h *handle) Read(ctx context.Context, dest []byte, off int64) (fuse.ReadRes
 		n, err := io.ReadFull(h.body, dest[:want])
 		h.pos += int64(n)
 		if n > 0 {
-			stats.noteRead(h.v.id, n)
+			stats.noteRead(h.v.id, n, off+int64(n), time.Since(t0))
 		}
 		if err == nil || (n > 0 && (errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF))) {
 			return fuse.ReadResultData(dest[:n]), 0
@@ -1550,6 +1561,7 @@ func main() {
 	}
 	root := &rootNode{st: st, movies: movies, shows: shows}
 	silo := newSiloNotifier(wc)
+	st.silo = silo
 	if cfg.reload > 0 {
 		go root.reloadLoop(cfg.reload, silo)
 	}

@@ -38,6 +38,31 @@ function trackRates() {
   }
 }
 
+const METHOD = { direct: "lecture directe", directplay: "lecture directe", directstream: "flux direct", transcode: "transcodage", remux: "remux" };
+
+// Qui lit : application et utilisateur selon Silo, puis processus qui ouvre le fichier.
+function whoLine(p) {
+  const parts = [];
+  if (p.client) {
+    if (p.client.app) parts.push(`<b>${esc(p.client.app)}</b>`);
+    if (p.client.user) parts.push(esc(p.client.user));
+    const m = p.client.play_method;
+    if (m) parts.push(esc((METHOD[m.toLowerCase().replace(/[^a-z]/g, "")] || m) + (p.client.resolution ? " " + p.client.resolution : "")));
+  }
+  if (p.process) parts.push(`<span title="pid ${esc(p.pid)}${p.opens > 1 ? " · " + esc(p.opens) + " ouvertures" : ""}">FUSE · ${esc(p.process)}</span>`);
+  return parts.length ? `<div class="who small">${parts.join(" · ")}</div>` : "";
+}
+
+function progress(p) {
+  if (!p.size || !p.position) return "";
+  const pct = Math.min(100, Math.round((p.position / p.size) * 100));
+  return `<span class="pos"><progress max="100" value="${pct}"></progress> ${pct} %</span>`;
+}
+
+function stalls(p) {
+  return p.stalls ? `<span class="warn-text">${num(p.stalls)} · ${ms(p.stall_ms)}</span>` : "0";
+}
+
 function renderLive() {
   const live = plays.filter((p) => isLive(p, serverNow));
   $("live").hidden = !live.length;
@@ -47,9 +72,12 @@ function renderLive() {
     const rate = rates.get(p.id);
     const version = p.status === "substitution" && p.served ? p.served : t.file;
     return `<div class="live-row">
-      <div class="live-main"><div class="title">${esc(t.title)}</div><div class="file">${esc(version)}</div></div>
+      <div class="live-main"><div class="title">${esc(t.title)}</div><div class="file">${esc(version)}</div>${whoLine(p)}</div>
       <div class="live-meta">${badge(label, cls)}
+        ${progress(p)}
         <span><b>${rate !== undefined ? bytes(rate) + "/s" : "…"}</b> <span class="muted">débit</span></span>
+        <span><b>${ms(p.first_byte_ms)}</b> <span class="muted">1er octet</span></span>
+        <span><b>${stalls(p)}</b> <span class="muted">blocages</span></span>
         <span><b>${bytes(p.bytes)}</b> <span class="muted">lus</span></span>
         <span class="muted">depuis ${esc(timeFmt.format(new Date(p.at)))}</span></div></div>`;
   }).join("");
@@ -275,10 +303,11 @@ function renderPlays() {
       : `<span class="muted">${["uncached", "no_imdb", "", "list_error"].includes(p.status || "") ? "–" : "originale"}</span>`;
     const err = p.errors ? `<div class="error small">${num(p.errors)} erreur(s) : ${esc(p.last_error)}</div>` : "";
     return `<tr><td class="when">${esc(when(p.at))}</td>
-      <td><div class="title">${esc(t.title)}</div><div class="file">${esc(t.file)}</div>${err}</td>
+      <td><div class="title">${esc(t.title)}</div><div class="file">${esc(t.file)}</div>${whoLine(p)}${err}</td>
       <td>${badge(label, cls)}${isLive(p, serverNow) ? " " + badge("En cours", "ok") : ""}</td><td>${served}</td>
-      <td class="num">${ms(p.resolve_ms)}</td><td class="num">${p.bytes ? bytes(p.bytes) : "–"}</td></tr>`;
-  }).join("") : `<tr><td colspan="6" class="empty">Aucune lecture sur cette période</td></tr>`;
+      <td class="num">${progress(p) || "–"}</td><td class="num">${ms(p.resolve_ms)}</td><td class="num">${ms(p.first_byte_ms)}</td>
+      <td class="num">${p.process ? stalls(p) : "–"}</td><td class="num">${p.bytes ? bytes(p.bytes) : "–"}</td></tr>`;
+  }).join("") : `<tr><td colspan="9" class="empty">Aucune lecture sur cette période</td></tr>`;
 }
 
 // ---------------------------------------------------------------- configuration
