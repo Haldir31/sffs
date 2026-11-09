@@ -1,4 +1,4 @@
-From 4ddd99dc87d20360736b5dc24f1496fa7e4b240c Mon Sep 17 00:00:00 2001
+From ad694e1e00f8c9ee76ebe46b378c7dff4ef01726 Mon Sep 17 00:00:00 2001
 From: haldir <haldir@localhost>
 Date: Wed, 28 Oct 2026 06:17:30 +0000
 Subject: [PATCH 07/10] =?UTF-8?q?sffs=20:=20d=C3=A9bit=20estim=C3=A9=20pou?=
@@ -19,7 +19,7 @@ entrée omise si l'estimation est impossible.
  2 files changed, 28 insertions(+), 4 deletions(-)
 
 diff --git a/internal/api/handlers/playback_v3.go b/internal/api/handlers/playback_v3.go
-index 387747f72..6069a3c2a 100644
+index 9cfa28032..d6bf01a36 100644
 --- a/internal/api/handlers/playback_v3.go
 +++ b/internal/api/handlers/playback_v3.go
 @@ -7030,9 +7030,10 @@ func (h *PlaybackHandler) lowerVersionV3(ctx context.Context, req playback.Start
@@ -66,10 +66,10 @@ index 387747f72..6069a3c2a 100644
  
  const (
 diff --git a/internal/playback/plan_v3.go b/internal/playback/plan_v3.go
-index 14b976ded..0efd1192a 100644
+index 4f7349224..ecf84ce69 100644
 --- a/internal/playback/plan_v3.go
 +++ b/internal/playback/plan_v3.go
-@@ -992,7 +992,9 @@ func lowerVersionQualitiesV3(input PlannerInputV3) []AvailableQualityV3 {
+@@ -1009,7 +1009,9 @@ func lowerVersionQualitiesV3(input PlannerInputV3) []AvailableQualityV3 {
  			}
  		}
  	}
@@ -80,6 +80,3 @@ index 14b976ded..0efd1192a 100644
  		qualities = append(qualities, AvailableQualityV3{
  			Label:       label,
  			DisplayName: label,
--- 
-2.56.0
-

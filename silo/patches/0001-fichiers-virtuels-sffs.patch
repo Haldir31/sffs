@@ -1,4 +1,4 @@
-From 3fef3d2478d31f3d0a3bcf698439f6ea65050181 Mon Sep 17 00:00:00 2001
+From ee10e3ba1369330cba6b7b157b0f5945ddfe124f Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 12:40:33 +0000
 Subject: [PATCH 01/10] =?UTF-8?q?sffs=20:=20reconna=C3=AEtre=20les=20fichi?=
@@ -88,7 +88,7 @@ index b2fccfe80..78246f0af 100644
  	if err != nil {
  		if os.IsNotExist(err) {
 diff --git a/internal/scanner/scanner.go b/internal/scanner/scanner.go
-index e179c50e3..a88dc80f8 100644
+index 7a86546b3..92869a75e 100644
 --- a/internal/scanner/scanner.go
 +++ b/internal/scanner/scanner.go
 @@ -26,6 +26,7 @@ import (
@@ -99,7 +99,7 @@ index e179c50e3..a88dc80f8 100644
  	"github.com/Silo-Server/silo-server/internal/themesongs"
  )
  
-@@ -4271,6 +4272,10 @@ func (s *Scanner) clearLegacyLinksForUnmatchableRoots(_ context.Context, _ int,
+@@ -4309,6 +4310,10 @@ func (s *Scanner) clearLegacyLinksForUnmatchableRoots(_ context.Context, _ int,
  // gatherHints computes the OSHash for a media file.
  func (s *Scanner) gatherHints(filePath string) FileHints {
  	hints := FileHints{}
@@ -110,7 +110,7 @@ index e179c50e3..a88dc80f8 100644
  	hash, err := ComputeOSHash(filePath)
  	if err != nil {
  		slog.Warn("scanner: OSHash computation failed", "path", filePath, "error", err)
-@@ -4289,6 +4294,9 @@ const probeSourceLocal = "local"
+@@ -4327,6 +4332,9 @@ const probeSourceLocal = "local"
  // file.
  func (s *Scanner) probeFile(ctx context.Context, filePath string) (probe *ProbeData, probeSource string, rejected bool) {
  	probeSource = probeSourceLocal
@@ -313,6 +313,3 @@ index 000000000..41f9eab5b
 +	}
 +	_, _ = getxattr(path, attrArm)
 +}
--- 
-2.56.0
-
