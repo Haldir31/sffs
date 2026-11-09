@@ -1,4 +1,4 @@
-From 8d0f6acf1d96c968e5670a07fae71f8640648d2a Mon Sep 17 00:00:00 2001
+From 88594a3191901c57d3493e3f8bd7bfe40406e16e Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Wed, 28 Oct 2026 11:23:04 +0000
 Subject: [PATCH 08/10] =?UTF-8?q?sffs=20:=20une=20version=20hors=20cache?=
@@ -29,7 +29,7 @@ Claude-Session: https://claude.ai/code/session_01QiNjz8NPPdd1V8G79eXFA5
  create mode 100644 internal/playback/sf_not_cached_test.go
 
 diff --git a/internal/api/handlers/playback_v3.go b/internal/api/handlers/playback_v3.go
-index 6069a3c2a..84647ed2f 100644
+index d6bf01a36..7341f565b 100644
 --- a/internal/api/handlers/playback_v3.go
 +++ b/internal/api/handlers/playback_v3.go
 @@ -7103,7 +7103,7 @@ func terminalAllowsAlternateFileV3(terminal *playback.TerminalV3) bool {
@@ -42,7 +42,7 @@ index 6069a3c2a..84647ed2f 100644
  	default:
  		return false
 diff --git a/internal/playback/plan_v3.go b/internal/playback/plan_v3.go
-index 0efd1192a..61e03765f 100644
+index ecf84ce69..bdc08f44b 100644
 --- a/internal/playback/plan_v3.go
 +++ b/internal/playback/plan_v3.go
 @@ -9,6 +9,7 @@ import (
@@ -140,6 +140,3 @@ index c37e85154..a2bc624df 100644
      case "source_metadata_incomplete":
        return {
          title: "This file hasn't finished scanning",
--- 
-2.56.0
-

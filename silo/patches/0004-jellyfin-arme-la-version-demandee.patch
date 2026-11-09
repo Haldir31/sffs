@@ -1,4 +1,4 @@
-From 96fcf8341c1902dc11d36d88fe38b52082a5e4bb Mon Sep 17 00:00:00 2001
+From db022b1329c550c1be6732d8d589ca5e094691bf Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 13:59:25 +0000
 Subject: [PATCH 04/10] =?UTF-8?q?sffs=20:=20l'API=20Jellyfin=20arme=20la?=
@@ -13,7 +13,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  1 file changed, 20 insertions(+)
 
 diff --git a/internal/jellycompat/handlers_playback.go b/internal/jellycompat/handlers_playback.go
-index 92e9ed85a..022cfe4b8 100644
+index 3f90f1d32..a2649f32c 100644
 --- a/internal/jellycompat/handlers_playback.go
 +++ b/internal/jellycompat/handlers_playback.go
 @@ -39,6 +39,7 @@ import (
@@ -32,7 +32,7 @@ index 92e9ed85a..022cfe4b8 100644
  	req.serverBitrateCapKbps, err = h.serverBitrateCap(r.Context(), session)
  	if err != nil {
  		writeError(w, http.StatusServiceUnavailable, "PlaybackUnavailable", "The server could not resolve the stream bitrate limit")
-@@ -4160,3 +4162,21 @@ func compatSubtitleProfileFormat(codec string) string {
+@@ -4255,3 +4257,21 @@ func compatSubtitleProfileFormat(codec string) string {
  		return strings.ToLower(strings.TrimSpace(codec))
  	}
  }
@@ -54,6 +54,3 @@ index 92e9ed85a..022cfe4b8 100644
 +	}
 +	sfvirtual.Arm(file.FilePath)
 +}
--- 
-2.56.0
-

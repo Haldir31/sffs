@@ -1,4 +1,4 @@
-From acaefa7b49f5c2b2e084157da60018f357f63bae Mon Sep 17 00:00:00 2001
+From ddc72406c42013c72395fcfbef3063365a70bbd1 Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 14:31:24 +0000
 Subject: [PATCH 05/10] sffs : une version hors cache bascule sur une autre
@@ -105,6 +105,3 @@ index 3f5198929..bdfd0a245 100644
  // Arm autorise la lecture de path pendant quelques heures. Sans effet sur un fichier ordinaire.
  func Arm(path string) {
  	if !Under(path) {
--- 
-2.56.0
-

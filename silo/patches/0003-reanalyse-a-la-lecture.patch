@@ -1,4 +1,4 @@
-From fc93b968ec0fdc64784607ba7f34d29574e71c86 Mon Sep 17 00:00:00 2001
+From b6d27500a8579f2eca818e66ef36a2e04101be07 Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 13:58:19 +0000
 Subject: [PATCH 03/10] =?UTF-8?q?sffs=20:=20r=C3=A9analyser=20un=20fichier?=
@@ -64,6 +64,3 @@ index 41f9eab5b..3f5198929 100644
  // Arm autorise la lecture de path pendant quelques heures. Sans effet sur un fichier ordinaire.
  func Arm(path string) {
  	if !Under(path) {
--- 
-2.56.0
-

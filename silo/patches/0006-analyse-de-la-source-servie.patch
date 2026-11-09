@@ -1,4 +1,4 @@
-From 3a0afba6542748247663d9c0fd79c263e327f9a7 Mon Sep 17 00:00:00 2001
+From 10a19a150dc205012da5a63fb2a25f016999d9b0 Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 20:23:18 +0000
 Subject: [PATCH 06/10] =?UTF-8?q?sffs=20:=20analyser=20la=20source=20r?=
@@ -187,6 +187,3 @@ index bdfd0a245..835fcc894 100644
 +	}
 +	return ""
 +}
--- 
-2.56.0
-
