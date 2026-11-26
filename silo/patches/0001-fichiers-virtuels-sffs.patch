@@ -1,4 +1,4 @@
-From 00da55baf58ccb39d996814e9cfa3c0693fd02e5 Mon Sep 17 00:00:00 2001
+From a3e70d03612ad3ba7d4f018afbe9829209b86904 Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 12:40:33 +0000
 Subject: [PATCH 01/10] =?UTF-8?q?sffs=20:=20reconna=C3=AEtre=20les=20fichi?=
@@ -26,10 +26,10 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  create mode 100644 internal/sfvirtual/sfvirtual.go
 
 diff --git a/internal/api/handlers/playback.go b/internal/api/handlers/playback.go
-index 5b968bd49..77ff3f0ea 100644
+index 0cc3c780a..a7fcb65f6 100644
 --- a/internal/api/handlers/playback.go
 +++ b/internal/api/handlers/playback.go
-@@ -38,6 +38,7 @@ import (
+@@ -39,6 +39,7 @@ import (
  	"github.com/Silo-Server/silo-server/internal/settingscontract"
  	"github.com/Silo-Server/silo-server/internal/settingskeys"
  	"github.com/Silo-Server/silo-server/internal/settingsresolve"
@@ -37,7 +37,7 @@ index 5b968bd49..77ff3f0ea 100644
  	"github.com/Silo-Server/silo-server/internal/streamtelemetry"
  	"github.com/Silo-Server/silo-server/internal/streamtoken"
  	"github.com/Silo-Server/silo-server/internal/subtitles"
-@@ -512,6 +513,8 @@ func (h *PlaybackHandler) ensurePlaybackProbe(ctx context.Context, file *models.
+@@ -514,6 +515,8 @@ func (h *PlaybackHandler) ensurePlaybackProbe(ctx context.Context, file *models.
  	if h == nil || h.ProbeEnsurer == nil || file == nil {
  		return file
  	}
@@ -88,7 +88,7 @@ index b2fccfe80..78246f0af 100644
  	if err != nil {
  		if os.IsNotExist(err) {
 diff --git a/internal/scanner/scanner.go b/internal/scanner/scanner.go
-index 2f0727e92..d464b0186 100644
+index dd270c26c..6c526fe52 100644
 --- a/internal/scanner/scanner.go
 +++ b/internal/scanner/scanner.go
 @@ -26,6 +26,7 @@ import (
@@ -99,7 +99,7 @@ index 2f0727e92..d464b0186 100644
  	"github.com/Silo-Server/silo-server/internal/themesongs"
  )
  
-@@ -4390,6 +4391,10 @@ func (s *Scanner) clearLegacyLinksForUnmatchableRoots(_ context.Context, _ int,
+@@ -4448,6 +4449,10 @@ func (s *Scanner) clearLegacyLinksForUnmatchableRoots(_ context.Context, _ int,
  // gatherHints computes the OSHash for a media file.
  func (s *Scanner) gatherHints(filePath string) FileHints {
  	hints := FileHints{}
@@ -110,7 +110,7 @@ index 2f0727e92..d464b0186 100644
  	hash, err := ComputeOSHash(filePath)
  	if err != nil {
  		slog.Warn("scanner: OSHash computation failed", "path", filePath, "error", err)
-@@ -4408,6 +4413,9 @@ const probeSourceLocal = "local"
+@@ -4466,6 +4471,9 @@ const probeSourceLocal = "local"
  // file.
  func (s *Scanner) probeFile(ctx context.Context, filePath string) (probe *ProbeData, probeSource string, rejected bool) {
  	probeSource = probeSourceLocal

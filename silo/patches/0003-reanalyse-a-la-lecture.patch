@@ -1,4 +1,4 @@
-From cbd4eea7d0b8c97eb3435332e91d6b3ed05ec6b1 Mon Sep 17 00:00:00 2001
+From 35c3fe4e0f40ffaf7c0fd3bc333b64444979415e Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 13:58:19 +0000
 Subject: [PATCH 03/10] =?UTF-8?q?sffs=20:=20r=C3=A9analyser=20un=20fichier?=
@@ -19,7 +19,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  2 files changed, 14 insertions(+), 3 deletions(-)
 
 diff --git a/internal/scanner/probe_repair.go b/internal/scanner/probe_repair.go
-index ff27f9210..00164df9a 100644
+index 4517274bf..374d1c534 100644
 --- a/internal/scanner/probe_repair.go
 +++ b/internal/scanner/probe_repair.go
 @@ -424,9 +424,10 @@ func (e *PlaybackProbeEnsurer) ensureProbeRepair(ctx context.Context, file *mode

@@ -1,4 +1,4 @@
-From 074a0cfbdfa5e0c1c0bd0e06b128abc976611bb7 Mon Sep 17 00:00:00 2001
+From 55b80fa4f2604b20751ecb73c908965bead12268 Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Wed, 28 Oct 2026 11:23:04 +0000
 Subject: [PATCH 08/10] =?UTF-8?q?sffs=20:=20une=20version=20hors=20cache?=
@@ -29,7 +29,7 @@ Claude-Session: https://claude.ai/code/session_01QiNjz8NPPdd1V8G79eXFA5
  create mode 100644 internal/playback/sf_not_cached_test.go
 
 diff --git a/internal/playback/candidate_planner_v3.go b/internal/playback/candidate_planner_v3.go
-index 00297b2b9..879435215 100644
+index ef16db256..4dbe3413d 100644
 --- a/internal/playback/candidate_planner_v3.go
 +++ b/internal/playback/candidate_planner_v3.go
 @@ -7,6 +7,7 @@ import (
@@ -40,7 +40,7 @@ index 00297b2b9..879435215 100644
  )
  
  // A candidate is one complete way to play the file: one option per dimension.
-@@ -131,6 +132,10 @@ func PlanPlaybackV3(input PlannerInputV3) PlannerResultV3 {
+@@ -137,6 +138,10 @@ func PlanPlaybackV3(input PlannerInputV3) PlannerResultV3 {
  		file = input.RequestedFile
  	}
  	if file.ProbeRejected() {

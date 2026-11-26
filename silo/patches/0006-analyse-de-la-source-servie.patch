@@ -1,4 +1,4 @@
-From 3412d7e1ac1344873696a8455809f17afdddded8 Mon Sep 17 00:00:00 2001
+From 1a9bb2d30e66cd5af10d80c0e5aafba7de2adc55 Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 20:23:18 +0000
 Subject: [PATCH 06/10] =?UTF-8?q?sffs=20:=20analyser=20la=20source=20r?=
@@ -21,7 +21,7 @@ Claude-Session: https://claude.ai/code/session_01AbUx511UGbcCoLk6U5BQjP
  2 files changed, 118 insertions(+)
 
 diff --git a/internal/scanner/probe_repair.go b/internal/scanner/probe_repair.go
-index 5c3dc0d58..8f535ae78 100644
+index 17d017f7b..3a28da643 100644
 --- a/internal/scanner/probe_repair.go
 +++ b/internal/scanner/probe_repair.go
 @@ -3,6 +3,7 @@ package scanner
