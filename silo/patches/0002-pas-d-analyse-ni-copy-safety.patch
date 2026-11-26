@@ -1,4 +1,4 @@
-From 74e7689ab51c2f4673e883489ce5edd71a7e3f05 Mon Sep 17 00:00:00 2001
+From dcec723eca39f99063624970de4086e3470a03aa Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 13:41:09 +0000
 Subject: [PATCH 02/10] =?UTF-8?q?sffs=20:=20pas=20d'analyse=20de=20r=C3=A9?=
@@ -17,7 +17,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  1 file changed, 10 insertions(+), 1 deletion(-)
 
 diff --git a/internal/scanner/probe_repair.go b/internal/scanner/probe_repair.go
-index ddd55d33b..180765d68 100644
+index 442d8f559..ff27f9210 100644
 --- a/internal/scanner/probe_repair.go
 +++ b/internal/scanner/probe_repair.go
 @@ -12,6 +12,7 @@ import (
@@ -28,7 +28,7 @@ index ddd55d33b..180765d68 100644
  	"github.com/Silo-Server/silo-server/internal/tonemap"
  	"golang.org/x/sync/singleflight"
  )
-@@ -347,6 +348,9 @@ func (e *PlaybackProbeEnsurer) NeedsCopySafetyScan(file *models.MediaFile) bool
+@@ -348,6 +349,9 @@ func (e *PlaybackProbeEnsurer) NeedsCopySafetyScan(file *models.MediaFile) bool
  	if e == nil || strings.TrimSpace(e.binaries().ffmpegPath) == "" || !needsCopySafetyProbe(file) {
  		return false
  	}
@@ -38,7 +38,7 @@ index ddd55d33b..180765d68 100644
  	_, known := e.knownCopySafetyVerdict(file)
  	return !known
  }
-@@ -419,6 +423,11 @@ func (e *PlaybackProbeEnsurer) ensureProbeRepair(ctx context.Context, file *mode
+@@ -420,6 +424,11 @@ func (e *PlaybackProbeEnsurer) ensureProbeRepair(ctx context.Context, file *mode
  	if file == nil || e == nil || e.fileRepo == nil {
  		return file, nil
  	}
@@ -50,7 +50,7 @@ index ddd55d33b..180765d68 100644
  
  	current := file
  	// One snapshot per repair: the guard and the ffprobe run must see the same
-@@ -565,7 +574,7 @@ func (e *PlaybackProbeEnsurer) recordProbeRejection(ctx context.Context, current
+@@ -566,7 +575,7 @@ func (e *PlaybackProbeEnsurer) recordProbeRejection(ctx context.Context, current
  // longer re-reads the opening seconds of every browsed H.264 file.
  func (e *PlaybackProbeEnsurer) ensureCopySafety(ctx context.Context, file *models.MediaFile) (*models.MediaFile, error) {
  	ffmpegPath := strings.TrimSpace(e.binaries().ffmpegPath)
@@ -60,5 +60,5 @@ index ddd55d33b..180765d68 100644
  	}
  
 -- 
-2.56.0
+2.56.1
 

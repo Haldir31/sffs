@@ -1,4 +1,4 @@
-From 99a8005b64af81c17733cd5f270f9239e17d25e7 Mon Sep 17 00:00:00 2001
+From 91b813d8b5af2f6e9ada9cf0b9068d7b4e3c03a7 Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 12:40:33 +0000
 Subject: [PATCH 01/10] =?UTF-8?q?sffs=20:=20reconna=C3=AEtre=20les=20fichi?=
@@ -26,10 +26,10 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  create mode 100644 internal/sfvirtual/sfvirtual.go
 
 diff --git a/internal/api/handlers/playback.go b/internal/api/handlers/playback.go
-index ebdd37c0f..069ffe4c8 100644
+index 5b968bd49..77ff3f0ea 100644
 --- a/internal/api/handlers/playback.go
 +++ b/internal/api/handlers/playback.go
-@@ -37,6 +37,7 @@ import (
+@@ -38,6 +38,7 @@ import (
  	"github.com/Silo-Server/silo-server/internal/settingscontract"
  	"github.com/Silo-Server/silo-server/internal/settingskeys"
  	"github.com/Silo-Server/silo-server/internal/settingsresolve"
@@ -37,7 +37,7 @@ index ebdd37c0f..069ffe4c8 100644
  	"github.com/Silo-Server/silo-server/internal/streamtelemetry"
  	"github.com/Silo-Server/silo-server/internal/streamtoken"
  	"github.com/Silo-Server/silo-server/internal/subtitles"
-@@ -523,6 +524,8 @@ func (h *PlaybackHandler) ensurePlaybackProbe(ctx context.Context, file *models.
+@@ -512,6 +513,8 @@ func (h *PlaybackHandler) ensurePlaybackProbe(ctx context.Context, file *models.
  	if h == nil || h.ProbeEnsurer == nil || file == nil {
  		return file
  	}
@@ -47,7 +47,7 @@ index ebdd37c0f..069ffe4c8 100644
  	if err != nil {
  		slog.WarnContext(ctx, "playback probe repair failed", "component", "api", "file_id", file.ID, "path", file.FilePath, "error", err)
 diff --git a/internal/api/handlers/playback_missing.go b/internal/api/handlers/playback_missing.go
-index 755771c87..c0456e3d8 100644
+index e8b50b914..f78088560 100644
 --- a/internal/api/handlers/playback_missing.go
 +++ b/internal/api/handlers/playback_missing.go
 @@ -15,6 +15,7 @@ import (
@@ -58,7 +58,7 @@ index 755771c87..c0456e3d8 100644
  )
  
  // MissingFileMarker marks media files as missing when playback discovers they
-@@ -103,6 +104,8 @@ func preflightPlaybackFile(
+@@ -105,6 +106,8 @@ func preflightPlaybackFile(
  		return &playbackFilePreflightError{notFound: true}
  	}
  
@@ -88,7 +88,7 @@ index b2fccfe80..78246f0af 100644
  	if err != nil {
  		if os.IsNotExist(err) {
 diff --git a/internal/scanner/scanner.go b/internal/scanner/scanner.go
-index 7a86546b3..92869a75e 100644
+index 2f0727e92..d464b0186 100644
 --- a/internal/scanner/scanner.go
 +++ b/internal/scanner/scanner.go
 @@ -26,6 +26,7 @@ import (
@@ -99,7 +99,7 @@ index 7a86546b3..92869a75e 100644
  	"github.com/Silo-Server/silo-server/internal/themesongs"
  )
  
-@@ -4309,6 +4310,10 @@ func (s *Scanner) clearLegacyLinksForUnmatchableRoots(_ context.Context, _ int,
+@@ -4390,6 +4391,10 @@ func (s *Scanner) clearLegacyLinksForUnmatchableRoots(_ context.Context, _ int,
  // gatherHints computes the OSHash for a media file.
  func (s *Scanner) gatherHints(filePath string) FileHints {
  	hints := FileHints{}
@@ -110,7 +110,7 @@ index 7a86546b3..92869a75e 100644
  	hash, err := ComputeOSHash(filePath)
  	if err != nil {
  		slog.Warn("scanner: OSHash computation failed", "path", filePath, "error", err)
-@@ -4327,6 +4332,9 @@ const probeSourceLocal = "local"
+@@ -4408,6 +4413,9 @@ const probeSourceLocal = "local"
  // file.
  func (s *Scanner) probeFile(ctx context.Context, filePath string) (probe *ProbeData, probeSource string, rejected bool) {
  	probeSource = probeSourceLocal
@@ -314,5 +314,5 @@ index 000000000..41f9eab5b
 +	_, _ = getxattr(path, attrArm)
 +}
 -- 
-2.56.0
+2.56.1
 

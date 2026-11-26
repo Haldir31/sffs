@@ -1,4 +1,4 @@
-From 5cfb372c720f4347b4901f0d40826ad1183164a3 Mon Sep 17 00:00:00 2001
+From f28c5295349db17ba9118edb0c0d13ffe7e5f72d Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Wed, 28 Oct 2026 11:23:04 +0000
 Subject: [PATCH 08/10] =?UTF-8?q?sffs=20:=20une=20version=20hors=20cache?=
@@ -19,43 +19,30 @@ Les clients Jellyfin n'affichent pas de message du serveur.
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01QiNjz8NPPdd1V8G79eXFA5
 ---
- internal/api/handlers/playback_v3.go    |  2 +-
- internal/playback/plan_v3.go            |  5 ++++
- internal/playback/sf_not_cached.go      | 10 +++++++
- internal/playback/sf_not_cached_test.go | 35 +++++++++++++++++++++++++
- web/src/player/playback-errors.ts       |  8 ++++++
+ internal/playback/candidate_planner_v3.go |  5 ++++
+ internal/playback/plan_refusal_v3.go      |  2 +-
+ internal/playback/sf_not_cached.go        | 10 +++++++
+ internal/playback/sf_not_cached_test.go   | 35 +++++++++++++++++++++++
+ web/src/player/playback-errors.ts         |  8 ++++++
  5 files changed, 59 insertions(+), 1 deletion(-)
  create mode 100644 internal/playback/sf_not_cached.go
  create mode 100644 internal/playback/sf_not_cached_test.go
 
-diff --git a/internal/api/handlers/playback_v3.go b/internal/api/handlers/playback_v3.go
-index 6855ab71f..5cd3fc021 100644
---- a/internal/api/handlers/playback_v3.go
-+++ b/internal/api/handlers/playback_v3.go
-@@ -7153,7 +7153,7 @@ func terminalAllowsAlternateFileV3(terminal *playback.TerminalV3) bool {
- 	}
- 	switch terminal.Reason {
- 	case terminalNoAlternateVersionV3, terminalHDRTranscodeUnsupportedV3, terminalSubtitleConversionUnsupportedV3, terminalBitratePolicyUnavailableV3,
--		playback.TerminalSourceUnreadableV3:
-+		playback.TerminalSourceUnreadableV3, playback.TerminalSourceNotCachedV3:
- 		return true
- 	default:
- 		return false
-diff --git a/internal/playback/plan_v3.go b/internal/playback/plan_v3.go
-index ecf84ce69..bdc08f44b 100644
---- a/internal/playback/plan_v3.go
-+++ b/internal/playback/plan_v3.go
-@@ -9,6 +9,7 @@ import (
+diff --git a/internal/playback/candidate_planner_v3.go b/internal/playback/candidate_planner_v3.go
+index 00297b2b9..879435215 100644
+--- a/internal/playback/candidate_planner_v3.go
++++ b/internal/playback/candidate_planner_v3.go
+@@ -7,6 +7,7 @@ import (
  	"time"
  
  	"github.com/Silo-Server/silo-server/internal/models"
 +	"github.com/Silo-Server/silo-server/internal/sfvirtual"
- 	"github.com/Silo-Server/silo-server/internal/tonemap"
  )
  
-@@ -269,6 +270,10 @@ func PlanPlaybackV3(input PlannerInputV3) (result PlannerResultV3) {
- 	// Answer before the bitrate-cap wrapper below, which would otherwise
- 	// rename the refusal after a policy that has nothing to do with it.
+ // A candidate is one complete way to play the file: one option per dimension.
+@@ -131,6 +132,10 @@ func PlanPlaybackV3(input PlannerInputV3) PlannerResultV3 {
+ 		file = input.RequestedFile
+ 	}
  	if file.ProbeRejected() {
 +		// Version virtuelle sffs : rejetée parce qu'elle n'est pas en cache chez le débrideur.
 +		if sfvirtual.Under(file.FilePath) {
@@ -63,7 +50,20 @@ index ecf84ce69..bdc08f44b 100644
 +		}
  		return terminalPlannerResultV3(TerminalSourceUnreadableV3, TerminalSourceUnreadableMessageV3, false)
  	}
- 	// No route plays an audio track FFmpeg cannot decode: conversion has no
+ 	// No route plays an audio track FFmpeg cannot decode; another track can.
+diff --git a/internal/playback/plan_refusal_v3.go b/internal/playback/plan_refusal_v3.go
+index d67a959c3..954650caa 100644
+--- a/internal/playback/plan_refusal_v3.go
++++ b/internal/playback/plan_refusal_v3.go
+@@ -35,7 +35,7 @@ func (result PlannerResultV3) AnotherVersionMayPlay() bool {
+ 	}
+ 	switch result.Terminal.Reason {
+ 	case TerminalNoAlternateVersionV3, TerminalHDRTranscodeUnsupportedV3, TerminalSubtitleConversionUnsupportedV3,
+-		TerminalBitratePolicyUnavailableV3, TerminalSourceUnreadableV3:
++		TerminalBitratePolicyUnavailableV3, TerminalSourceUnreadableV3, TerminalSourceNotCachedV3:
+ 		return true
+ 	default:
+ 		return false
 diff --git a/internal/playback/sf_not_cached.go b/internal/playback/sf_not_cached.go
 new file mode 100644
 index 000000000..bd48a34e8
@@ -141,5 +141,5 @@ index aadd8a2cf..3c997ef1f 100644
        return {
          title: t("web.player.error.sourceMetadataIncomplete.title"),
 -- 
-2.56.0
+2.56.1
 

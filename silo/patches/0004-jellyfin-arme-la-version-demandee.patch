@@ -1,4 +1,4 @@
-From 67b4302f6ef74a748a6f01011813d8b365579112 Mon Sep 17 00:00:00 2001
+From f6792801001e0152761ddea8319b8b96281d3046 Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 13:59:25 +0000
 Subject: [PATCH 04/10] =?UTF-8?q?sffs=20:=20l'API=20Jellyfin=20arme=20la?=
@@ -13,18 +13,18 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  1 file changed, 20 insertions(+)
 
 diff --git a/internal/jellycompat/handlers_playback.go b/internal/jellycompat/handlers_playback.go
-index 53b43f4b4..7659c804f 100644
+index b58a9299d..d3c49a22a 100644
 --- a/internal/jellycompat/handlers_playback.go
 +++ b/internal/jellycompat/handlers_playback.go
-@@ -39,6 +39,7 @@ import (
- 	"github.com/Silo-Server/silo-server/internal/nodepool"
+@@ -43,6 +43,7 @@ import (
  	"github.com/Silo-Server/silo-server/internal/noderouting"
+ 	"github.com/Silo-Server/silo-server/internal/nodesource"
  	"github.com/Silo-Server/silo-server/internal/playback"
 +	"github.com/Silo-Server/silo-server/internal/sfvirtual"
  	"github.com/Silo-Server/silo-server/internal/streamlocation"
  	"github.com/Silo-Server/silo-server/internal/streamtoken"
  	"github.com/Silo-Server/silo-server/internal/subtitles"
-@@ -2281,6 +2282,7 @@ func (h *PlaybackHandler) HandlePlaybackInfo(w http.ResponseWriter, r *http.Requ
+@@ -2471,6 +2472,7 @@ func (h *PlaybackHandler) HandlePlaybackInfo(w http.ResponseWriter, r *http.Requ
  	if req.MediaSourceID == "" {
  		req.MediaSourceID = pathMediaSourceID
  	}
@@ -32,7 +32,7 @@ index 53b43f4b4..7659c804f 100644
  	req.serverBitrateCapKbps, err = h.serverBitrateCap(r.Context(), session)
  	if err != nil {
  		writeError(w, http.StatusServiceUnavailable, "PlaybackUnavailable", "The server could not resolve the stream bitrate limit")
-@@ -4275,3 +4277,21 @@ func compatSubtitleProfileFormat(codec string) string {
+@@ -4639,3 +4641,21 @@ func compatSubtitleProfileFormat(codec string) string {
  		return strings.ToLower(strings.TrimSpace(codec))
  	}
  }
@@ -55,5 +55,5 @@ index 53b43f4b4..7659c804f 100644
 +	sfvirtual.Arm(file.FilePath)
 +}
 -- 
-2.56.0
+2.56.1
 

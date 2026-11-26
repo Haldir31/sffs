@@ -1,4 +1,4 @@
-From 06b47982a690950de69c4b58a9a330eabb60f14a Mon Sep 17 00:00:00 2001
+From ee3ecb1d0792bc228be4a7abbee1c7943e41696e Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 14:31:24 +0000
 Subject: [PATCH 05/10] sffs : une version hors cache bascule sur une autre
@@ -17,10 +17,10 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  3 files changed, 38 insertions(+), 5 deletions(-)
 
 diff --git a/internal/scanner/probe_repair.go b/internal/scanner/probe_repair.go
-index 6b5bf198e..f5072202f 100644
+index 00164df9a..5c3dc0d58 100644
 --- a/internal/scanner/probe_repair.go
 +++ b/internal/scanner/probe_repair.go
-@@ -426,8 +426,16 @@ func (e *PlaybackProbeEnsurer) ensureProbeRepair(ctx context.Context, file *mode
+@@ -427,8 +427,16 @@ func (e *PlaybackProbeEnsurer) ensureProbeRepair(ctx context.Context, file *mode
  	// Version virtuelle StreamFusion : tant qu'elle n'est pas armée (simple consultation), pas de
  	// ffprobe, qui lirait le fichier chez le débrideur. Armée (lecture en cours), la réparation
  	// complète ce que StreamFusion ne fournit pas (durée, pistes réelles) et l'enregistre.
@@ -106,5 +106,5 @@ index 3f5198929..bdfd0a245 100644
  func Arm(path string) {
  	if !Under(path) {
 -- 
-2.56.0
+2.56.1
 
