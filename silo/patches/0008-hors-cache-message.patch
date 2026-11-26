@@ -1,4 +1,4 @@
-From 88bde5162aae752715b2ca6f2270d2eab2380cd2 Mon Sep 17 00:00:00 2001
+From 5cfb372c720f4347b4901f0d40826ad1183164a3 Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Wed, 28 Oct 2026 11:23:04 +0000
 Subject: [PATCH 08/10] =?UTF-8?q?sffs=20:=20une=20version=20hors=20cache?=
@@ -29,10 +29,10 @@ Claude-Session: https://claude.ai/code/session_01QiNjz8NPPdd1V8G79eXFA5
  create mode 100644 internal/playback/sf_not_cached_test.go
 
 diff --git a/internal/api/handlers/playback_v3.go b/internal/api/handlers/playback_v3.go
-index d6bf01a36..7341f565b 100644
+index 6855ab71f..5cd3fc021 100644
 --- a/internal/api/handlers/playback_v3.go
 +++ b/internal/api/handlers/playback_v3.go
-@@ -7103,7 +7103,7 @@ func terminalAllowsAlternateFileV3(terminal *playback.TerminalV3) bool {
+@@ -7153,7 +7153,7 @@ func terminalAllowsAlternateFileV3(terminal *playback.TerminalV3) bool {
  	}
  	switch terminal.Reason {
  	case terminalNoAlternateVersionV3, terminalHDRTranscodeUnsupportedV3, terminalSubtitleConversionUnsupportedV3, terminalBitratePolicyUnavailableV3,
@@ -122,12 +122,12 @@ index 000000000..a86dd8de5
 +	}
 +}
 diff --git a/web/src/player/playback-errors.ts b/web/src/player/playback-errors.ts
-index c37e85154..a2bc624df 100644
+index aadd8a2cf..3c997ef1f 100644
 --- a/web/src/player/playback-errors.ts
 +++ b/web/src/player/playback-errors.ts
-@@ -40,6 +40,14 @@ export function describePlanTerminal(terminal: TerminalV3): PlaybackPolicyErrorD
-         message:
-           "Silo couldn't read this file. It appears to be empty or damaged. Replace the file, then rescan the library.",
+@@ -39,6 +39,14 @@ export function describePlanTerminal(terminal: TerminalV3): PlaybackPolicyErrorD
+         title: t("web.player.error.sourceUnreadable.title"),
+         message: t("web.player.error.sourceUnreadable.message"),
        };
 +    case "source_not_cached":
 +      // sffs : aucune version prête chez le débrideur (le fichier n'est pas abîmé).
@@ -139,7 +139,7 @@ index c37e85154..a2bc624df 100644
 +      };
      case "source_metadata_incomplete":
        return {
-         title: "This file hasn't finished scanning",
+         title: t("web.player.error.sourceMetadataIncomplete.title"),
 -- 
 2.56.0
 

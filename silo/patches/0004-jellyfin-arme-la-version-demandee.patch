@@ -1,4 +1,4 @@
-From 53204dfdee298ad9b91ab8cac8d220f239a7aa64 Mon Sep 17 00:00:00 2001
+From 67b4302f6ef74a748a6f01011813d8b365579112 Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 13:59:25 +0000
 Subject: [PATCH 04/10] =?UTF-8?q?sffs=20:=20l'API=20Jellyfin=20arme=20la?=
@@ -13,7 +13,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  1 file changed, 20 insertions(+)
 
 diff --git a/internal/jellycompat/handlers_playback.go b/internal/jellycompat/handlers_playback.go
-index 3f90f1d32..a2649f32c 100644
+index 53b43f4b4..7659c804f 100644
 --- a/internal/jellycompat/handlers_playback.go
 +++ b/internal/jellycompat/handlers_playback.go
 @@ -39,6 +39,7 @@ import (
@@ -24,7 +24,7 @@ index 3f90f1d32..a2649f32c 100644
  	"github.com/Silo-Server/silo-server/internal/streamlocation"
  	"github.com/Silo-Server/silo-server/internal/streamtoken"
  	"github.com/Silo-Server/silo-server/internal/subtitles"
-@@ -2271,6 +2272,7 @@ func (h *PlaybackHandler) HandlePlaybackInfo(w http.ResponseWriter, r *http.Requ
+@@ -2281,6 +2282,7 @@ func (h *PlaybackHandler) HandlePlaybackInfo(w http.ResponseWriter, r *http.Requ
  	if req.MediaSourceID == "" {
  		req.MediaSourceID = pathMediaSourceID
  	}
@@ -32,7 +32,7 @@ index 3f90f1d32..a2649f32c 100644
  	req.serverBitrateCapKbps, err = h.serverBitrateCap(r.Context(), session)
  	if err != nil {
  		writeError(w, http.StatusServiceUnavailable, "PlaybackUnavailable", "The server could not resolve the stream bitrate limit")
-@@ -4255,3 +4257,21 @@ func compatSubtitleProfileFormat(codec string) string {
+@@ -4275,3 +4277,21 @@ func compatSubtitleProfileFormat(codec string) string {
  		return strings.ToLower(strings.TrimSpace(codec))
  	}
  }
