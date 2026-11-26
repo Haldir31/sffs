@@ -1,4 +1,4 @@
-From a3e70d03612ad3ba7d4f018afbe9829209b86904 Mon Sep 17 00:00:00 2001
+From 81d0ba147374b035aabc173663fa9ef86b7e4a77 Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 12:40:33 +0000
 Subject: [PATCH 01/10] =?UTF-8?q?sffs=20:=20reconna=C3=AEtre=20les=20fichi?=
@@ -26,7 +26,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  create mode 100644 internal/sfvirtual/sfvirtual.go
 
 diff --git a/internal/api/handlers/playback.go b/internal/api/handlers/playback.go
-index 0cc3c780a..a7fcb65f6 100644
+index 2e37b8bb2..0706db0d4 100644
 --- a/internal/api/handlers/playback.go
 +++ b/internal/api/handlers/playback.go
 @@ -39,6 +39,7 @@ import (
@@ -37,7 +37,7 @@ index 0cc3c780a..a7fcb65f6 100644
  	"github.com/Silo-Server/silo-server/internal/streamtelemetry"
  	"github.com/Silo-Server/silo-server/internal/streamtoken"
  	"github.com/Silo-Server/silo-server/internal/subtitles"
-@@ -514,6 +515,8 @@ func (h *PlaybackHandler) ensurePlaybackProbe(ctx context.Context, file *models.
+@@ -561,6 +562,8 @@ func (h *PlaybackHandler) ensurePlaybackProbe(ctx context.Context, file *models.
  	if h == nil || h.ProbeEnsurer == nil || file == nil {
  		return file
  	}
@@ -47,7 +47,7 @@ index 0cc3c780a..a7fcb65f6 100644
  	if err != nil {
  		slog.WarnContext(ctx, "playback probe repair failed", "component", "api", "file_id", file.ID, "path", file.FilePath, "error", err)
 diff --git a/internal/api/handlers/playback_missing.go b/internal/api/handlers/playback_missing.go
-index e8b50b914..f78088560 100644
+index f598557a5..811701b8f 100644
 --- a/internal/api/handlers/playback_missing.go
 +++ b/internal/api/handlers/playback_missing.go
 @@ -15,6 +15,7 @@ import (
@@ -58,7 +58,7 @@ index e8b50b914..f78088560 100644
  )
  
  // MissingFileMarker marks media files as missing when playback discovers they
-@@ -105,6 +106,8 @@ func preflightPlaybackFile(
+@@ -116,6 +117,8 @@ func preflightPlaybackFile(
  		return &playbackFilePreflightError{notFound: true}
  	}
  
@@ -88,7 +88,7 @@ index b2fccfe80..78246f0af 100644
  	if err != nil {
  		if os.IsNotExist(err) {
 diff --git a/internal/scanner/scanner.go b/internal/scanner/scanner.go
-index dd270c26c..6c526fe52 100644
+index c50f7a072..69fe25b4f 100644
 --- a/internal/scanner/scanner.go
 +++ b/internal/scanner/scanner.go
 @@ -26,6 +26,7 @@ import (
@@ -99,7 +99,7 @@ index dd270c26c..6c526fe52 100644
  	"github.com/Silo-Server/silo-server/internal/themesongs"
  )
  
-@@ -4448,6 +4449,10 @@ func (s *Scanner) clearLegacyLinksForUnmatchableRoots(_ context.Context, _ int,
+@@ -4417,6 +4418,10 @@ func applyProbeData(mf *models.MediaFile, probe *ProbeData, probeSource string)
  // gatherHints computes the OSHash for a media file.
  func (s *Scanner) gatherHints(filePath string) FileHints {
  	hints := FileHints{}
@@ -110,7 +110,7 @@ index dd270c26c..6c526fe52 100644
  	hash, err := ComputeOSHash(filePath)
  	if err != nil {
  		slog.Warn("scanner: OSHash computation failed", "path", filePath, "error", err)
-@@ -4466,6 +4471,9 @@ const probeSourceLocal = "local"
+@@ -4435,6 +4440,9 @@ const probeSourceLocal = "local"
  // file.
  func (s *Scanner) probeFile(ctx context.Context, filePath string) (probe *ProbeData, probeSource string, rejected bool) {
  	probeSource = probeSourceLocal
@@ -207,7 +207,7 @@ index 000000000..0e6cec988
 +}
 diff --git a/internal/sfvirtual/sfvirtual.go b/internal/sfvirtual/sfvirtual.go
 new file mode 100644
-index 000000000..41f9eab5b
+index 000000000..374d79c9d
 --- /dev/null
 +++ b/internal/sfvirtual/sfvirtual.go
 @@ -0,0 +1,102 @@
@@ -224,9 +224,9 @@ index 000000000..41f9eab5b
 +	"errors"
 +	"os"
 +	"strings"
-+	"syscall"
 +
 +	"github.com/Silo-Server/silo-server/internal/fspath"
++	"golang.org/x/sys/unix"
 +)
 +
 +const (
@@ -272,8 +272,8 @@ index 000000000..41f9eab5b
 +	path = fspath.Decode(path)
 +	buf := make([]byte, 4096)
 +	for {
-+		n, err := syscall.Getxattr(path, name, buf)
-+		if errors.Is(err, syscall.ERANGE) {
++		n, err := unix.Getxattr(path, name, buf)
++		if errors.Is(err, unix.ERANGE) {
 +			buf = make([]byte, len(buf)*4)
 +			continue
 +		}

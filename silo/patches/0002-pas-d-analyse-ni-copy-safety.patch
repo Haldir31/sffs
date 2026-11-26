@@ -1,4 +1,4 @@
-From 86cb38b86f812de29ebd136d9334f7e8f2857430 Mon Sep 17 00:00:00 2001
+From 85ce9ac9407b85cb4641168e00d2d0c259f0407d Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 13:41:09 +0000
 Subject: [PATCH 02/10] =?UTF-8?q?sffs=20:=20pas=20d'analyse=20de=20r=C3=A9?=
@@ -17,7 +17,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  1 file changed, 10 insertions(+), 1 deletion(-)
 
 diff --git a/internal/scanner/probe_repair.go b/internal/scanner/probe_repair.go
-index d3582e24c..4517274bf 100644
+index 1f78a9153..412c2b8a3 100644
 --- a/internal/scanner/probe_repair.go
 +++ b/internal/scanner/probe_repair.go
 @@ -12,6 +12,7 @@ import (
@@ -38,7 +38,7 @@ index d3582e24c..4517274bf 100644
  	_, known := e.knownCopySafetyVerdict(file)
  	return !known
  }
-@@ -420,6 +424,11 @@ func (e *PlaybackProbeEnsurer) ensureProbeRepair(ctx context.Context, file *mode
+@@ -418,6 +422,11 @@ func (e *PlaybackProbeEnsurer) ensureProbeRepair(ctx context.Context, file *mode
  	if file == nil || e == nil || e.fileRepo == nil {
  		return file, nil
  	}
@@ -50,7 +50,7 @@ index d3582e24c..4517274bf 100644
  
  	current := file
  	// One snapshot per repair: the guard and the ffprobe run must see the same
-@@ -566,7 +575,7 @@ func (e *PlaybackProbeEnsurer) recordProbeRejection(ctx context.Context, current
+@@ -564,7 +573,7 @@ func (e *PlaybackProbeEnsurer) recordProbeRejection(ctx context.Context, current
  // longer re-reads the opening seconds of every browsed H.264 file.
  func (e *PlaybackProbeEnsurer) ensureCopySafety(ctx context.Context, file *models.MediaFile) (*models.MediaFile, error) {
  	ffmpegPath := strings.TrimSpace(e.binaries().ffmpegPath)

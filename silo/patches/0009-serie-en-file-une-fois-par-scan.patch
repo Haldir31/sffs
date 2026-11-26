@@ -1,4 +1,4 @@
-From 79a477fc246a115e819c33eaaf3dcc0e2ae10eea Mon Sep 17 00:00:00 2001
+From 1e196d0a80ae50c47996322c2cd73a83db185d96 Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Fri, 30 Oct 2026 11:32:39 +0000
 Subject: [PATCH 09/10] =?UTF-8?q?sffs=20:=20une=20racine=20de=20s=C3=A9rie?=
@@ -20,7 +20,7 @@ chaque racine) ne font plus l'appel qu'au premier fichier de chaque racine.
  create mode 100644 internal/scanner/series_root_dedupe_test.go
 
 diff --git a/internal/scanner/scanner.go b/internal/scanner/scanner.go
-index 6c526fe52..92426b6bd 100644
+index 69fe25b4f..059c6c54d 100644
 --- a/internal/scanner/scanner.go
 +++ b/internal/scanner/scanner.go
 @@ -834,6 +834,10 @@ func (s *Scanner) scanPaths(
@@ -34,7 +34,7 @@ index 6c526fe52..92426b6bd 100644
  
  	result := &ScanResult{}
  
-@@ -1211,6 +1215,10 @@ func (s *Scanner) scanFolderByRoots(
+@@ -1208,6 +1212,10 @@ func (s *Scanner) scanFolderByRoots(
  	walkRoots []string,
  	reconcileRoots []string,
  ) (*ScanResult, error) {
@@ -45,7 +45,7 @@ index 6c526fe52..92426b6bd 100644
  	warning, err := s.scanWarningBeforeWalk(ctx, folder.ID, true)
  	if err != nil {
  		return nil, err
-@@ -3933,6 +3941,9 @@ func (s *Scanner) enqueueMetadataWork(ctx context.Context, folder *models.MediaF
+@@ -3911,6 +3919,9 @@ func (s *Scanner) enqueueMetadataWork(ctx context.Context, folder *models.MediaF
  		if strings.TrimSpace(file.ObservedRootPath) == "" {
  			return nil
  		}

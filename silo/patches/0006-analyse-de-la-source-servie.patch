@@ -1,4 +1,4 @@
-From 1a9bb2d30e66cd5af10d80c0e5aafba7de2adc55 Mon Sep 17 00:00:00 2001
+From 9e9e0234834d8d996013bf60ddfe2a6aa67da8fc Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 20:23:18 +0000
 Subject: [PATCH 06/10] =?UTF-8?q?sffs=20:=20analyser=20la=20source=20r?=
@@ -21,7 +21,7 @@ Claude-Session: https://claude.ai/code/session_01AbUx511UGbcCoLk6U5BQjP
  2 files changed, 118 insertions(+)
 
 diff --git a/internal/scanner/probe_repair.go b/internal/scanner/probe_repair.go
-index 17d017f7b..3a28da643 100644
+index 40b3abc18..ca12d9619 100644
 --- a/internal/scanner/probe_repair.go
 +++ b/internal/scanner/probe_repair.go
 @@ -3,6 +3,7 @@ package scanner
@@ -40,7 +40,7 @@ index 17d017f7b..3a28da643 100644
  	"github.com/Silo-Server/silo-server/internal/mediaprobe"
  	"github.com/Silo-Server/silo-server/internal/models"
  	"github.com/Silo-Server/silo-server/internal/sfvirtual"
-@@ -443,6 +445,16 @@ func (e *PlaybackProbeEnsurer) ensureProbeRepair(ctx context.Context, file *mode
+@@ -441,6 +443,16 @@ func (e *PlaybackProbeEnsurer) ensureProbeRepair(ctx context.Context, file *mode
  	// One snapshot per repair: the guard and the ffprobe run must see the same
  	// binaries, or a SetFFmpegPath between them hands probeFile an empty path.
  	ffprobePath := strings.TrimSpace(e.binaries().ffprobePath)
@@ -57,7 +57,7 @@ index 17d017f7b..3a28da643 100644
  	if NeedsCriticalProbeRepair(file) && ffprobePath != "" {
  		repaired, err := e.ensureCriticalProbe(ctx, file, ffprobePath)
  		if err != nil {
-@@ -532,6 +544,85 @@ func (e *PlaybackProbeEnsurer) ensureCriticalProbe(ctx context.Context, file *mo
+@@ -530,6 +542,85 @@ func (e *PlaybackProbeEnsurer) ensureCriticalProbe(ctx context.Context, file *mo
  	}
  }
  
@@ -144,7 +144,7 @@ index 17d017f7b..3a28da643 100644
  // row as stored afterwards, so the planner can answer with a terminal that
  // names the damaged file instead of one that suggests waiting for a scan. It
 diff --git a/internal/sfvirtual/sfvirtual.go b/internal/sfvirtual/sfvirtual.go
-index bdfd0a245..835fcc894 100644
+index daee8edf7..ebe44f4f1 100644
 --- a/internal/sfvirtual/sfvirtual.go
 +++ b/internal/sfvirtual/sfvirtual.go
 @@ -21,8 +21,14 @@ const (

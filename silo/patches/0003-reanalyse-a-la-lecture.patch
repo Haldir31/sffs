@@ -1,4 +1,4 @@
-From 35c3fe4e0f40ffaf7c0fd3bc333b64444979415e Mon Sep 17 00:00:00 2001
+From 347c1682c118e690f677bfeb896e0ad7942c6108 Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 13:58:19 +0000
 Subject: [PATCH 03/10] =?UTF-8?q?sffs=20:=20r=C3=A9analyser=20un=20fichier?=
@@ -19,10 +19,10 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  2 files changed, 14 insertions(+), 3 deletions(-)
 
 diff --git a/internal/scanner/probe_repair.go b/internal/scanner/probe_repair.go
-index 4517274bf..374d1c534 100644
+index 412c2b8a3..9d65999b0 100644
 --- a/internal/scanner/probe_repair.go
 +++ b/internal/scanner/probe_repair.go
-@@ -424,9 +424,10 @@ func (e *PlaybackProbeEnsurer) ensureProbeRepair(ctx context.Context, file *mode
+@@ -422,9 +422,10 @@ func (e *PlaybackProbeEnsurer) ensureProbeRepair(ctx context.Context, file *mode
  	if file == nil || e == nil || e.fileRepo == nil {
  		return file, nil
  	}
@@ -37,7 +37,7 @@ index 4517274bf..374d1c534 100644
  	}
  
 diff --git a/internal/sfvirtual/sfvirtual.go b/internal/sfvirtual/sfvirtual.go
-index 41f9eab5b..3f5198929 100644
+index 374d79c9d..d2167b9b7 100644
 --- a/internal/sfvirtual/sfvirtual.go
 +++ b/internal/sfvirtual/sfvirtual.go
 @@ -19,6 +19,7 @@ import (

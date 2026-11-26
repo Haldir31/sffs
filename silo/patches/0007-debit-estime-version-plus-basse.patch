@@ -1,5 +1,5 @@
-From a4b443c0dba0476460b039cc4e3a2112f169f2d0 Mon Sep 17 00:00:00 2001
-From: haldir <haldir@localhost>
+From 315c79d55c19c6a3768b0c556521e56e11746a1e Mon Sep 17 00:00:00 2001
+From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Wed, 28 Oct 2026 06:17:30 +0000
 Subject: [PATCH 07/10] =?UTF-8?q?sffs=20:=20d=C3=A9bit=20estim=C3=A9=20pou?=
  =?UTF-8?q?r=20la=20version=20plus=20basse=20du=20menu=20des=20qualit?=
@@ -19,10 +19,10 @@ entrée omise si l'estimation est impossible.
  2 files changed, 28 insertions(+), 4 deletions(-)
 
 diff --git a/internal/api/handlers/playback_v3.go b/internal/api/handlers/playback_v3.go
-index c4786e77d..acdbcddd5 100644
+index 2c03e35b0..8a8913cd3 100644
 --- a/internal/api/handlers/playback_v3.go
 +++ b/internal/api/handlers/playback_v3.go
-@@ -7017,9 +7017,10 @@ func (h *PlaybackHandler) lowerVersionV3(ctx context.Context, req playback.Start
+@@ -7103,9 +7103,10 @@ func (h *PlaybackHandler) lowerVersionV3(ctx context.Context, req playback.Start
  			// Candidates are ordered non-4K first; the rest are 4K too.
  			return nil
  		}
@@ -35,7 +35,7 @@ index c4786e77d..acdbcddd5 100644
  		}
  	}
  	return nil
-@@ -7033,7 +7034,28 @@ func lowerVersionForFileV3(lower *playback.LowerVersionV3, file *models.MediaFil
+@@ -7119,7 +7120,28 @@ func lowerVersionForFileV3(lower *playback.LowerVersionV3, file *models.MediaFil
  	if lower == nil || file == nil || playback.Is4KMediaFileV3(file) {
  		return lower
  	}
@@ -66,7 +66,7 @@ index c4786e77d..acdbcddd5 100644
  
  // terminalSubtitleUnavailableInVersionV3 is the handler's own refusal of an
 diff --git a/internal/playback/plan_v3.go b/internal/playback/plan_v3.go
-index 3e7e1ede6..faee16c43 100644
+index 589b280c9..141023405 100644
 --- a/internal/playback/plan_v3.go
 +++ b/internal/playback/plan_v3.go
 @@ -400,7 +400,9 @@ func lowerVersionQualitiesV3(input PlannerInputV3) []AvailableQualityV3 {

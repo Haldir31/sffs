@@ -1,4 +1,4 @@
-From 39d6d19d659c2a3660a1fa42378fc2a1ece958c0 Mon Sep 17 00:00:00 2001
+From 542021836d9e38c071d8d35c4fec3833015c4817 Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
 Date: Mon, 26 Oct 2026 14:31:24 +0000
 Subject: [PATCH 05/10] sffs : une version hors cache bascule sur une autre
@@ -17,10 +17,10 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  3 files changed, 38 insertions(+), 5 deletions(-)
 
 diff --git a/internal/scanner/probe_repair.go b/internal/scanner/probe_repair.go
-index 374d1c534..17d017f7b 100644
+index 9d65999b0..40b3abc18 100644
 --- a/internal/scanner/probe_repair.go
 +++ b/internal/scanner/probe_repair.go
-@@ -427,8 +427,16 @@ func (e *PlaybackProbeEnsurer) ensureProbeRepair(ctx context.Context, file *mode
+@@ -425,8 +425,16 @@ func (e *PlaybackProbeEnsurer) ensureProbeRepair(ctx context.Context, file *mode
  	// Version virtuelle StreamFusion : tant qu'elle n'est pas armée (simple consultation), pas de
  	// ffprobe, qui lirait le fichier chez le débrideur. Armée (lecture en cours), la réparation
  	// complète ce que StreamFusion ne fournit pas (durée, pistes réelles) et l'enregistre.
@@ -71,7 +71,7 @@ index 0e6cec988..4512d673f 100644
 +	return &c
 +}
 diff --git a/internal/sfvirtual/sfvirtual.go b/internal/sfvirtual/sfvirtual.go
-index 3f5198929..bdfd0a245 100644
+index d2167b9b7..daee8edf7 100644
 --- a/internal/sfvirtual/sfvirtual.go
 +++ b/internal/sfvirtual/sfvirtual.go
 @@ -17,9 +17,10 @@ import (
