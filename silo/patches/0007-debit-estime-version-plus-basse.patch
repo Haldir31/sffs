@@ -1,6 +1,6 @@
-From 315c79d55c19c6a3768b0c556521e56e11746a1e Mon Sep 17 00:00:00 2001
+From 18da065b52eb5815fceff68c7961894ed0ae77f5 Mon Sep 17 00:00:00 2001
 From: Haldir31 <53797644+Haldir31@users.noreply.github.com>
-Date: Wed, 28 Oct 2026 06:17:30 +0000
+Date: Fri, 27 Nov 2026 05:13:52 +0000
 Subject: [PATCH 07/10] =?UTF-8?q?sffs=20:=20d=C3=A9bit=20estim=C3=A9=20pou?=
  =?UTF-8?q?r=20la=20version=20plus=20basse=20du=20menu=20des=20qualit?=
  =?UTF-8?q?=C3=A9s?=
@@ -19,10 +19,10 @@ entrée omise si l'estimation est impossible.
  2 files changed, 28 insertions(+), 4 deletions(-)
 
 diff --git a/internal/api/handlers/playback_v3.go b/internal/api/handlers/playback_v3.go
-index 2c03e35b0..8a8913cd3 100644
+index f62d22138..a7179de87 100644
 --- a/internal/api/handlers/playback_v3.go
 +++ b/internal/api/handlers/playback_v3.go
-@@ -7103,9 +7103,10 @@ func (h *PlaybackHandler) lowerVersionV3(ctx context.Context, req playback.Start
+@@ -7105,9 +7105,10 @@ func (h *PlaybackHandler) lowerVersionV3(ctx context.Context, req playback.Start
  			// Candidates are ordered non-4K first; the rest are 4K too.
  			return nil
  		}
@@ -35,7 +35,7 @@ index 2c03e35b0..8a8913cd3 100644
  		}
  	}
  	return nil
-@@ -7119,7 +7120,28 @@ func lowerVersionForFileV3(lower *playback.LowerVersionV3, file *models.MediaFil
+@@ -7121,7 +7122,28 @@ func lowerVersionForFileV3(lower *playback.LowerVersionV3, file *models.MediaFil
  	if lower == nil || file == nil || playback.Is4KMediaFileV3(file) {
  		return lower
  	}
